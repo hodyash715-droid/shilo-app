@@ -53,7 +53,7 @@ export default function Calendar({ jobs, onOpen }) {
               <div key={i} style={{
                 minHeight: 92, borderRadius: 8, padding: 5,
                 background: dnum ? 'var(--paper)' : 'transparent',
-                border: isToday(dnum) ? '1.5px solid var(--ink)' : dnum ? '1px solid var(--hair)' : '1px solid transparent',
+                border: isToday(dnum) ? '1.5px solid var(--gold)' : dnum ? '1px solid var(--hair)' : '1px solid transparent',
               }}>
                 {dnum && (
                   <div className="mono" style={{

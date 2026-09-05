@@ -8,8 +8,8 @@ export default function Header({ view, setView, onNew }) {
       style={{
         height: 34, padding: '0 14px', borderRadius: 999,
         fontWeight: 600,
-        background: view === id ? 'var(--ink)' : 'transparent',
-        color: view === id ? '#fff' : 'var(--ink45)',
+        background: view === id ? 'var(--gold)' : 'transparent',
+        color: view === id ? 'var(--on-gold)' : 'var(--ink45)',
       }}
     >{label}</button>
   )

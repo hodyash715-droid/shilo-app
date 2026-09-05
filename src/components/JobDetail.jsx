@@ -44,7 +44,7 @@ export default function JobDetail({ job, onClose, onStatus }) {
                 title={s.label}
                 style={{
                   flex: 1, height: 6, borderRadius: 3, border: 0, cursor: 'pointer', padding: 0,
-                  background: i <= curIdx ? 'var(--ink)' : 'var(--hair)',
+                  background: i <= curIdx ? 'var(--gold)' : 'var(--hair)',
                 }} />
             ))}
           </div>
@@ -71,7 +71,7 @@ export default function JobDetail({ job, onClose, onStatus }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
               {job.items.map((it, i) => (
                 <div key={i} className="row gap-3" style={{
-                  background: 'var(--paper)', border: '1px solid var(--hair)',
+                  background: 'var(--card-2)', border: '1px solid var(--line)',
                   borderRadius: 8, padding: 8,
                 }}>
                   <Thumb cat={it.cat} size={44} />

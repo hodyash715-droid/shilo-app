@@ -18,7 +18,7 @@ export function StatusPill({ id, size }) {
 
 // placeholder לתמונת פריט — נשמר hook לתמונה אמיתית בעתיד (prop src)
 const catStroke = {
-  backdrop: '#E4DFD4', carpet: '#E9E2D6', sign: '#E7E0D2', print: '#EAE6DC', other: '#E9E5DB',
+  backdrop: '#2C2A24', carpet: '#2E2A20', sign: '#312B1E', print: '#2A2A2E', other: '#2A2924',
 }
 export function Thumb({ cat, size = 48, label }) {
   return (
@@ -26,15 +26,15 @@ export function Thumb({ cat, size = 48, label }) {
       style={{
         width: size, height: size, flex: 'none', borderRadius: 6, overflow: 'hidden',
         position: 'relative',
-        background: `repeating-linear-gradient(135deg, #F3EFE6 0 6px, ${catStroke[cat] || '#E6E1D6'} 6px 12px)`,
-        border: '1px solid var(--hair)',
+        background: `repeating-linear-gradient(135deg, #1C1C20 0 6px, ${catStroke[cat] || '#28271F'} 6px 12px)`,
+        border: '1px solid var(--line)',
       }}
       aria-hidden="true"
     >
       {label && (
         <span className="mono" style={{
           position: 'absolute', insetInlineEnd: 3, bottom: 2, fontSize: 8,
-          color: 'var(--ink45)', background: 'rgba(255,255,255,.7)', padding: '0 2px', borderRadius: 2,
+          color: 'var(--ink45)', background: 'rgba(0,0,0,.55)', padding: '0 2px', borderRadius: 2,
         }}>{label}</span>
       )}
     </div>

@@ -1,36 +1,46 @@
 /* =========================================================================
-   שילה — מערכת העיצוב (.sh)
-   פלטה, גופנים, RTL וטיפול במספרים נשמרים מהמערכת הקיימת.
-   שיפורי המפרט מיושמים מראש: ניגודיות ink45, דרגות רדיוס, דרגת טיפוגרפיה.
+   שילה — מערכת העיצוב (.sh) · ערכת שחור-זהב (השראת ביתר ירושלים)
+   שחור פחם, זהב לזהות/פעולה/דחיפות, ירוק ל"מוכן". RTL ומספרים במונו נשמרים.
    ========================================================================= */
 
 :root {
-  /* --- פלטה --- */
-  --paper:   #F1F0EC;   /* רקע — נייר בז' */
-  --card:    #FFFFFF;   /* משטח כרטיס */
-  --ink:     #14161A;   /* טקסט ראשי / פעולה ניטרלית */
-  --ink70:   #3E434B;   /* טקסט משני */
-  --ink45:   #5B6067;   /* מטא — שופר מ-#767B84 לניגודיות AA */
-  --ink25:   #9AA0A8;   /* טקסט מושתק / עתידי */
-  --line:    #D6D3CB;   /* גבול כרטיס — הוכהה מעט לנראות על נייר */
-  --hair:    #EDEBE4;   /* קו שיער עדין */
+  /* --- משטחים --- */
+  --paper:   #0E0E10;   /* רקע עמוד */
+  --card:    #161618;   /* משטח כרטיס */
+  --card-2:  #1D1D21;   /* משטח מוגבה (ניווט, תג נייטרלי) */
+  --line:    #2A2A2F;   /* גבול כרטיס */
+  --hair:    #242327;   /* קו שיער */
 
-  --brand:   #8E2B20;   /* זהות בלבד — לוגו, count-dot. לא כפתורים ולא סטטוס */
-  --signal:  #D2540E;   /* דחיפות + CTA ראשי */
-  --signal-bg:#FBEEE3;  /* רקע תג דחיפות */
-  --go:      #2C6E49;   /* מצב תקין / הושלם */
-  --go-bg:   #E7F0E9;   /* רקע תג תקין */
+  /* --- טקסט --- */
+  --ink:     #F1EFE8;   /* טקסט ראשי */
+  --ink70:   #ADA593;   /* טקסט משני */
+  --ink45:   #948E7F;   /* מטא */
+  --ink25:   #6E6A5E;   /* מושתק / עתידי */
 
-  --ink-panel:#181310;  /* לוח כהה (מסך כניסה) */
+  /* --- זהב (זהות + פעולה ראשית + דחיפות) --- */
+  --gold:    #EEC421;
+  --on-gold: #0E0E10;   /* טקסט על זהב */
+  --gold-bg: #201C10;
+  --gold-fg: #EED056;
 
-  /* --- דרגות רדיוס --- */
-  --r-card:  10px;
-  --r:       7px;
-  --r-chip:  4px;
+  /* --- ירוק (מצב תקין / הושלם) --- */
+  --go:      #55C07E;
+  --go-bg:   #13201A;
+  --go-fg:   #68CE8E;
+
+  /* תאימות לאחור: זהות ודחיפות = זהב */
+  --brand:   #EEC421;
+  --signal:  #EEC421;
+  --signal-bg: #201C10;
+
+  /* --- רדיוס --- */
+  --r-card:  13px;
+  --r:       9px;
+  --r-chip:  6px;
 
   /* --- צל --- */
-  --shadow-card: 0 1px 2px rgba(24,19,16,.04), 0 6px 16px -10px rgba(24,19,16,.18);
-  --shadow-pop:  0 12px 28px -14px rgba(24,19,16,.28);
+  --shadow-card: 0 1px 2px rgba(0,0,0,.5), 0 12px 28px -18px rgba(0,0,0,.8);
+  --shadow-pop:  0 24px 60px -24px rgba(0,0,0,.85);
 }
 
 * { box-sizing: border-box; }
@@ -89,11 +99,11 @@ body {
   white-space: nowrap;
 }
 .btn:active { transform: translateY(1px); }
-.btn:hover { background: #FAF9F6; }
-.btn-solid { background: var(--ink); color: #fff; border-color: var(--ink); }
-.btn-solid:hover { background: #000; }
-.btn-signal { background: var(--signal); color: #fff; border-color: var(--signal); }
-.btn-signal:hover { background: #BC490B; }
+.btn:hover { background: #202024; }
+.btn-solid { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
+.btn-solid:hover { background: #F4CE3B; }
+.btn-signal { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
+.btn-signal:hover { background: #F4CE3B; }
 .btn-ghost { background: transparent; border-color: transparent; }
 .btn-ghost:hover { background: var(--hair); }
 .btn-sm { height: 32px; padding: 0 10px; font-size: 13px; }
@@ -109,7 +119,8 @@ body {
   font: inherit;
   color: var(--ink);
 }
-.field:focus { outline: 2px solid var(--ink); outline-offset: -1px; }
+.field:focus { outline: 2px solid var(--gold); outline-offset: -1px; }
+.field::placeholder { color: var(--ink25); }
 
 /* תגים / chips */
 .chip {
@@ -121,12 +132,12 @@ body {
   border-radius: var(--r-chip);
   font-size: 12px;
   font-weight: 600;
-  background: var(--hair);
+  background: #232327;
   color: var(--ink70);
   white-space: nowrap;
 }
-.chip-signal { background: var(--signal-bg); color: var(--signal); }
-.chip-go     { background: var(--go-bg);     color: var(--go); }
+.chip-signal { background: var(--gold-bg); color: var(--gold-fg); }
+.chip-go     { background: var(--go-bg);   color: var(--go-fg); }
 .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
 /* count-dot — זהות המותג */
@@ -138,31 +149,31 @@ body {
   height: 22px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--brand);
-  color: #fff;
+  background: var(--gold);
+  color: var(--on-gold);
   font-size: 12px;
   font-weight: 700;
 }
 
 /* brand-mark — הלוגו */
 .brand-mark {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r);
-  background: var(--brand);
-  color: #fff;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--gold);
+  color: var(--on-gold);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-family: "Secular One", sans-serif;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1;
   flex: none;
 }
 
 /* פס גלילה עדין */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #d8d5cd; border-radius: 999px; border: 3px solid var(--paper); }
+::-webkit-scrollbar-thumb { background: #333338; border-radius: 999px; border: 3px solid var(--paper); }
 
 .hairline { height: 1px; background: var(--hair); border: 0; }
 

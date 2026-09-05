@@ -102,9 +102,9 @@ export default function Board({ jobs, onOpen }) {
   const chip = (id, label) => (
     <button key={id} onClick={() => setFilter(id)} className="btn btn-sm" style={{
       borderRadius: 999,
-      background: filter === id ? 'var(--ink)' : 'var(--card)',
-      color: filter === id ? '#fff' : 'var(--ink70)',
-      borderColor: filter === id ? 'var(--ink)' : 'var(--line)',
+      background: filter === id ? 'var(--gold)' : 'var(--card)',
+      color: filter === id ? 'var(--on-gold)' : 'var(--ink70)',
+      borderColor: filter === id ? 'var(--gold)' : 'var(--line)',
     }}>{label}</button>
   )
 
