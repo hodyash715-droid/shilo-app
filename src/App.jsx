@@ -7,6 +7,15 @@ import Calendar from './components/Calendar.jsx'
 import JobDetail from './components/JobDetail.jsx'
 import JobEdit from './components/JobEdit.jsx'
 import Login from './components/Login.jsx'
+import { VERSION } from './version.js'
+
+const VersionBadge = () => (
+  <div className="mono" style={{
+    position: 'fixed', insetInlineStart: 9, bottom: 6, zIndex: 60,
+    fontSize: 10, color: 'var(--ink25)', opacity: .6, pointerEvents: 'none',
+    letterSpacing: '.03em',
+  }}>{VERSION}</div>
+)
 
 function Setup() {
   return (
@@ -69,11 +78,12 @@ export default function App() {
   }
 
   if (!authReady) return <div style={{ minHeight: '100%' }} />
-  if (!isConfigured) return <Setup />
-  if (!session) return <Login />
+  if (!isConfigured) return <><Setup /><VersionBadge /></>
+  if (!session) return <><Login /><VersionBadge /></>
 
   return (
     <div style={{ minHeight: '100%', paddingBottom: 40 }}>
+      <VersionBadge />
       <Header
         view={view} setView={setView}
         onNew={() => setEditTarget(null)}
