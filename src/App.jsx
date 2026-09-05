@@ -12,9 +12,11 @@ import { VERSION } from './version.js'
 
 const VersionBadge = () => (
   <div className="mono version-badge" style={{
-    position: 'fixed', insetInlineStart: 9, bottom: 6, zIndex: 60,
-    fontSize: 10, color: 'var(--ink25)', opacity: .6, pointerEvents: 'none',
-    letterSpacing: '.03em',
+    position: 'fixed', left: 10, bottom: 10, zIndex: 60,
+    fontSize: 11, color: 'var(--ink45)',
+    background: 'var(--card)', border: '1px solid var(--line)',
+    borderRadius: 999, padding: '3px 9px', pointerEvents: 'none',
+    letterSpacing: '.04em', boxShadow: '0 2px 8px rgba(0,0,0,.4)',
   }}>{VERSION}</div>
 )
 
@@ -105,7 +107,7 @@ export default function App() {
       {loading
         ? <div style={{ maxWidth: 1120, margin: '40px auto', padding: 16 }} className="muted">טוען…</div>
         : view === 'board'
-          ? <Board jobs={jobs} onOpen={j => setOpenId(j.id)} />
+          ? <Board jobs={jobs} onOpen={j => setOpenId(j.id)} onStatus={setStatus} />
           : <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
 
       {openJob && (
