@@ -31,7 +31,7 @@ export default function Header({ view, setView, onNew, email, onSignOut }) {
           </div>
         </div>
 
-        <nav className="row gap-2" style={{
+        <nav className="row gap-2 only-desktop" style={{
           background: 'var(--card)', border: '1px solid var(--line)',
           borderRadius: 999, padding: 3,
         }}>
@@ -40,9 +40,9 @@ export default function Header({ view, setView, onNew, email, onSignOut }) {
         </nav>
 
         <div className="row gap-2">
-          <button className="btn btn-solid" onClick={onNew}>
+          <button className="btn btn-solid only-desktop" onClick={onNew}>
             <span style={{ fontSize: 18, marginTop: -2 }}>＋</span>
-            <span className="hide-sm">עבודה חדשה</span>
+            <span>עבודה חדשה</span>
           </button>
           {onSignOut && (
             <button className="btn btn-ghost btn-sm" onClick={onSignOut} title={email || 'יציאה'} aria-label="יציאה">

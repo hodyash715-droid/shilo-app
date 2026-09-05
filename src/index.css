@@ -194,3 +194,46 @@ body {
 @media (max-width: 560px) {
   .hide-sm { display: none; }
 }
+
+/* --- הצגה/הסתרה לפי גודל מסך --- */
+.only-mobile { display: none !important; }
+@media (max-width: 560px) {
+  .only-desktop { display: none !important; }
+  .only-mobile  { display: flex !important; }
+  .pad-tabbar   { padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important; }
+}
+
+/* --- טאב-בר תחתון (מובייל) --- */
+.tabbar {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 30;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+  padding: 8px 22px calc(8px + env(safe-area-inset-bottom));
+  align-items: center; justify-content: space-between;
+  box-shadow: 0 -12px 28px -18px rgba(0,0,0,.8);
+}
+.tabbar-btn {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  color: var(--ink45); font: inherit; font-size: 11px; font-weight: 600;
+  padding: 4px 14px; border-radius: 10px; min-width: 64px;
+}
+.tabbar-btn[data-active="true"] { color: var(--gold); }
+
+/* --- כפתור צף (FAB) --- */
+.fab {
+  appearance: none; border: 0; cursor: pointer;
+  width: 60px; height: 60px; border-radius: 999px;
+  background: var(--gold); color: var(--on-gold);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; line-height: 1; margin-top: -30px;
+  box-shadow: 0 8px 22px -6px rgba(238,196,33,.5), 0 2px 6px rgba(0,0,0,.5);
+  transition: transform .06s;
+}
+.fab:active { transform: translateY(1px) scale(.97); }
+
+/* מיקום סימן הגרסה מעל הטאב-בר במובייל */
+@media (max-width: 560px) {
+  .version-badge { bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
+}

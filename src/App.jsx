@@ -7,10 +7,11 @@ import Calendar from './components/Calendar.jsx'
 import JobDetail from './components/JobDetail.jsx'
 import JobEdit from './components/JobEdit.jsx'
 import Login from './components/Login.jsx'
+import MobileNav from './components/MobileNav.jsx'
 import { VERSION } from './version.js'
 
 const VersionBadge = () => (
-  <div className="mono" style={{
+  <div className="mono version-badge" style={{
     position: 'fixed', insetInlineStart: 9, bottom: 6, zIndex: 60,
     fontSize: 10, color: 'var(--ink25)', opacity: .6, pointerEvents: 'none',
     letterSpacing: '.03em',
@@ -82,7 +83,7 @@ export default function App() {
   if (!session) return <><Login /><VersionBadge /></>
 
   return (
-    <div style={{ minHeight: '100%', paddingBottom: 40 }}>
+    <div className="pad-tabbar" style={{ minHeight: '100%', paddingBottom: 40 }}>
       <VersionBadge />
       <Header
         view={view} setView={setView}
@@ -124,6 +125,8 @@ export default function App() {
           onDeleted={onDeleted}
         />
       )}
+
+      <MobileNav view={view} setView={setView} onNew={() => setEditTarget(null)} />
     </div>
   )
 }
