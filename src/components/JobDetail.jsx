@@ -2,7 +2,7 @@ import React from 'react'
 import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils } from '../data.js'
 import { Thumb, catLabel } from './ui.jsx'
 
-export default function JobDetail({ job, onClose, onStatus }) {
+export default function JobDetail({ job, onClose, onStatus, onEdit }) {
   if (!job) return null
   const curIdx = statusIndex(job.status)
   const urgent = isUrgent(job)
@@ -113,8 +113,7 @@ export default function JobDetail({ job, onClose, onStatus }) {
 
         {/* פוטר */}
         <div style={{ padding: 14, borderTop: '1px solid var(--line)' }} className="row gap-2">
-          <button className="btn grow">עריכה</button>
-          <button className="btn grow">שיבוץ צוות</button>
+          <button className="btn btn-solid grow" onClick={onEdit}>עריכת העבודה</button>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function Header({ view, setView, onNew }) {
+export default function Header({ view, setView, onNew, email, onSignOut }) {
   const tab = (id, label) => (
     <button
       onClick={() => setView(id)}
@@ -39,10 +39,17 @@ export default function Header({ view, setView, onNew }) {
           {tab('calendar', 'לוח שנה')}
         </nav>
 
-        <button className="btn btn-solid" onClick={onNew}>
-          <span style={{ fontSize: 18, marginTop: -2 }}>＋</span>
-          <span className="hide-sm">עבודה חדשה</span>
-        </button>
+        <div className="row gap-2">
+          <button className="btn btn-solid" onClick={onNew}>
+            <span style={{ fontSize: 18, marginTop: -2 }}>＋</span>
+            <span className="hide-sm">עבודה חדשה</span>
+          </button>
+          {onSignOut && (
+            <button className="btn btn-ghost btn-sm" onClick={onSignOut} title={email || 'יציאה'} aria-label="יציאה">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+          )}
+        </div>
       </div>
     </header>
   )
