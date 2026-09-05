@@ -206,18 +206,18 @@ body {
 /* --- טאב-בר תחתון (מובייל) --- */
 .tabbar {
   position: fixed; inset-inline: 0; bottom: 0; z-index: 30;
-  background: color-mix(in srgb, var(--card) 92%, transparent);
+  background: color-mix(in srgb, var(--card) 94%, transparent);
   backdrop-filter: blur(10px);
   border-top: 1px solid var(--line);
-  padding: 8px 22px calc(8px + env(safe-area-inset-bottom));
-  align-items: center; justify-content: space-between;
+  padding: 7px 6px calc(7px + env(safe-area-inset-bottom));
+  align-items: stretch; justify-content: space-between; gap: 2px;
   box-shadow: 0 -12px 28px -18px rgba(0,0,0,.8);
 }
 .tabbar-btn {
   appearance: none; border: 0; background: transparent; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  color: var(--ink45); font: inherit; font-size: 11px; font-weight: 600;
-  padding: 4px 14px; border-radius: 10px; min-width: 64px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--ink45); font: inherit; font-size: 10px; font-weight: 600;
+  padding: 4px 2px; border-radius: 10px; flex: 1 1 0; min-width: 0;
 }
 .tabbar-btn[data-active="true"] { color: var(--gold); }
 

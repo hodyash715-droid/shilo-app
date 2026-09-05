@@ -1,0 +1,118 @@
+import React from 'react'
+import { daysUntil, relLabel } from '../data.js'
+import Board from './Board.jsx'
+
+const greeting = () => {
+  const h = new Date().getHours()
+  if (h < 5) return 'לילה טוב'
+  if (h < 12) return 'בוקר טוב'
+  if (h < 18) return 'צהריים טובים'
+  if (h < 22) return 'ערב טוב'
+  return 'לילה טוב'
+}
+
+const isOverdue = j => j.eventDate && daysUntil(j.eventDate) < 0 && j.status !== 'installed'
+const needsTeam = j => j.team.length === 0 && !['inquiry', 'installed'].includes(j.status)
+
+// מה כל עבודה צריכה — לפי עדיפות
+function needOf(j) {
+  if (isOverdue(j)) return { kind: 'overdue', reason: `באיחור · ${relLabel(j.eventDate)}`, action: 'עדכן', hot: true }
+  if (j.status === 'approval') return { kind: 'approval', reason: 'ממתין לאישור', action: 'אשר', hot: true }
+  if (needsTeam(j)) return { kind: 'team', reason: 'חסר צוות', action: 'שבץ' }
+  if (j.status === 'inquiry') return { kind: 'inquiry', reason: 'פנייה חדשה — לתמחר', action: 'הצעה' }
+  return null
+}
+const RANK = { overdue: 0, approval: 1, team: 2, inquiry: 3 }
+
+function Hero({ name, jobs }) {
+  const overdue = jobs.filter(isOverdue).length
+  const approval = jobs.filter(j => j.status === 'approval').length
+  const team = jobs.filter(needsTeam).length
+  return (
+    <div className="card" style={{ position: 'relative', overflow: 'hidden', padding: '20px 20px 18px', marginBottom: 18 }}>
+      <div aria-hidden style={{
+        position: 'absolute', insetInlineStart: 0, top: 0, bottom: 0, width: 120, opacity: .5,
+        background: 'repeating-linear-gradient(135deg, transparent 0 10px, var(--gold-bg) 10px 20px)',
+        maskImage: 'linear-gradient(to left, black, transparent)', WebkitMaskImage: 'linear-gradient(to left, black, transparent)',
+      }} />
+      <div style={{ position: 'relative' }}>
+        <div className="t-h1">{greeting()}, {name}.</div>
+        <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
+          <b style={{ color: 'var(--gold)' }}>{approval}</b> לאישור · <b style={{ color: 'var(--gold)' }}>{team}</b> לשיבוץ · <b style={{ color: overdue ? '#E5735B' : 'var(--ink70)' }}>{overdue}</b> באיחור
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InboxRow({ job, need, onOpen, act }) {
+  return (
+    <div role="button" tabIndex={0} onClick={() => onOpen(job)}
+      onKeyDown={e => { if (e.key === 'Enter') onOpen(job) }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer',
+        borderInlineStart: `3px solid ${need.hot ? 'var(--gold)' : 'var(--line)'}`,
+      }}>
+      <div className="grow" style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 14.5 }} className="truncate">{job.title || job.client}</div>
+        <div className="t-meta" style={{ marginTop: 2 }}>
+          <span style={{ color: need.hot ? 'var(--gold-fg)' : 'var(--ink45)', fontWeight: 600 }}>{need.reason}</span>
+          {job.title ? ` · ${job.client}` : ''}
+        </div>
+      </div>
+      <button onClick={e => { e.stopPropagation(); act(job, need) }} className="btn btn-sm btn-solid"
+        style={{ flex: 'none' }}>{need.action}</button>
+    </div>
+  )
+}
+
+export default function Home({ jobs, name, onOpen, onStatus, onEdit }) {
+  const inbox = jobs
+    .map(j => ({ job: j, need: needOf(j) }))
+    .filter(x => x.need)
+    .sort((a, b) => (RANK[a.need.kind] - RANK[b.need.kind])
+      || ((a.job.eventDate ? daysUntil(a.job.eventDate) : 9e9) - (b.job.eventDate ? daysUntil(b.job.eventDate) : 9e9)))
+
+  const act = (job, need) => {
+    if (need.kind === 'approval') onStatus(job.id, 'production')
+    else onEdit(job)              // overdue / team / inquiry → פתיחה לעריכה
+  }
+
+  return (
+    <div style={{ maxWidth: 1120, margin: '0 auto', padding: 16 }}>
+      <Hero name={name} jobs={jobs} />
+
+      <div className="row between" style={{ marginBottom: 10 }}>
+        <div className="row gap-2">
+          <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />
+          <span style={{ fontWeight: 700, fontSize: 16 }}>דורש טיפול</span>
+        </div>
+        <span className="t-meta">{inbox.length} פתוחים</span>
+      </div>
+
+      {inbox.length === 0 ? (
+        <div className="card" style={{ padding: 28, textAlign: 'center', marginBottom: 26 }}>
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>הכל תחת שליטה 🎯</div>
+          <div className="muted" style={{ fontSize: 13 }}>אין כרגע עבודות שדורשות פעולה מיידית.</div>
+        </div>
+      ) : (
+        <div className="card" style={{ overflow: 'hidden', marginBottom: 26 }}>
+          {inbox.slice(0, 8).map(({ job, need }, i) => (
+            <div key={job.id} style={{ borderTop: i ? '1px solid var(--hair)' : 0 }}>
+              <InboxRow job={job} need={need} onOpen={onOpen} act={act} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* כל העבודות */}
+      <div className="row gap-2" style={{ marginBottom: 4 }}>
+        <span style={{ width: 4, height: 18, background: 'var(--ink45)', borderRadius: 2 }} />
+        <span style={{ fontWeight: 700, fontSize: 16 }}>כל העבודות</span>
+      </div>
+      <div style={{ marginInline: -16 }}>
+        <Board jobs={jobs} onOpen={onOpen} onStatus={onStatus} />
+      </div>
+    </div>
+  )
+}

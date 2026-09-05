@@ -2,13 +2,17 @@ import React, { useEffect, useRef, useState } from 'react'
 import { supabase, isConfigured } from './supabase.js'
 import { fetchJobs, updateJob } from './db.js'
 import Header from './components/Header.jsx'
-import Board from './components/Board.jsx'
+import Home from './components/Home.jsx'
 import Calendar from './components/Calendar.jsx'
 import JobDetail from './components/JobDetail.jsx'
 import JobEdit from './components/JobEdit.jsx'
 import Login from './components/Login.jsx'
 import MobileNav from './components/MobileNav.jsx'
+import Settings from './components/Settings.jsx'
+import ComingSoon from './components/ComingSoon.jsx'
 import { VERSION } from './version.js'
+
+const displayName = (email) => ({ shai: 'שי' })[(email || '').split('@')[0]] || (email || '').split('@')[0] || 'שי'
 
 const VersionBadge = () => (
   <div className="mono version-badge" style={{
@@ -65,7 +69,7 @@ export default function App() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(false)
   const [loadErr, setLoadErr] = useState('')
-  const [view, setView] = useState('board')
+  const [view, setView] = useState('home')
   const [openId, setOpenId] = useState(null)
   const [editTarget, setEditTarget] = useState(undefined) // undefined=closed, null=new, job=edit
   const [toast, setToast] = useState(null)
@@ -144,9 +148,17 @@ export default function App() {
       {loading
         ? <BoardSkeleton />
         : <div className="fade-in" key={view}>
-            {view === 'board'
-              ? <Board jobs={jobs} onOpen={j => setOpenId(j.id)} onStatus={setStatus} />
-              : <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
+            {view === 'home' && (
+              <Home jobs={jobs} name={displayName(session.user?.email)}
+                onOpen={j => setOpenId(j.id)} onStatus={setStatus} onEdit={j => setEditTarget(j)} />
+            )}
+            {view === 'calendar' && <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
+            {view === 'team' && <ComingSoon icon="team" title="שיבוץ צוות"
+              lines={['ניהול חברי הצוות ושיבוצם לאירועים.', 'מי מתקין מה, ומתי — במבט אחד.']} />}
+            {view === 'field' && <ComingSoon icon="field" title="בשטח"
+              lines={['מעקב אחרי ציוד שיצא לאירועים —', 'מה בחוץ, אצל מי, ומה חזר למחסן.']} />}
+            {view === 'settings' && <Settings name={displayName(session.user?.email)}
+              email={session.user?.email} onSignOut={() => supabase.auth.signOut()} />}
           </div>}
 
       {openJob && (
@@ -167,7 +179,7 @@ export default function App() {
         />
       )}
 
-      <MobileNav view={view} setView={setView} onNew={() => setEditTarget(null)} />
+      <MobileNav view={view} setView={setView} />
       {toast && <Toast text={toast} />}
     </div>
   )
