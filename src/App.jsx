@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { supabase, isConfigured } from './supabase.js'
 import { fetchJobs, updateJob } from './db.js'
 import Header from './components/Header.jsx'
@@ -18,6 +18,33 @@ const VersionBadge = () => (
     borderRadius: 999, padding: '3px 9px', pointerEvents: 'none',
     letterSpacing: '.04em', boxShadow: '0 2px 8px rgba(0,0,0,.4)',
   }}>{VERSION}</div>
+)
+
+const Toast = ({ text }) => (
+  <div className="toast">
+    <span className="toast-ic">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+    </span>
+    {text}
+  </div>
+)
+
+const SkeletonCard = () => (
+  <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="skeleton" style={{ width: 78, height: 22 }} />
+    <div className="skeleton" style={{ width: '72%', height: 18 }} />
+    <div className="skeleton" style={{ width: '42%', height: 13 }} />
+    <div className="skeleton" style={{ width: '100%', height: 34, borderRadius: 8 }} />
+  </div>
+)
+
+const BoardSkeleton = () => (
+  <div style={{ maxWidth: 1120, margin: '0 auto', padding: 16 }}>
+    <div className="skeleton" style={{ height: 44, borderRadius: 9, marginBottom: 16 }} />
+    <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+      {[0, 1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} />)}
+    </div>
+  </div>
 )
 
 function Setup() {
@@ -41,6 +68,13 @@ export default function App() {
   const [view, setView] = useState('board')
   const [openId, setOpenId] = useState(null)
   const [editTarget, setEditTarget] = useState(undefined) // undefined=closed, null=new, job=edit
+  const [toast, setToast] = useState(null)
+  const toastRef = useRef()
+  const showToast = (text) => {
+    setToast(text)
+    clearTimeout(toastRef.current)
+    toastRef.current = setTimeout(() => setToast(null), 2200)
+  }
 
   // מעקב אחר מצב התחברות
   useEffect(() => {
@@ -63,8 +97,9 @@ export default function App() {
 
   const setStatus = async (id, statusId) => {
     setJobs(js => js.map(j => (j.id === id ? { ...j, status: statusId } : j)))  // אופטימי
+    showToast('הסטטוס עודכן')
     try { await updateJob(id, { status: statusId }) }
-    catch (e) { alert('עדכון סטטוס נכשל'); load() }
+    catch (e) { showToast('עדכון נכשל'); load() }
   }
 
   const onSaved = (saved) => {
@@ -74,10 +109,12 @@ export default function App() {
     })
     setEditTarget(undefined)
     setOpenId(null)
+    showToast('העבודה נשמרה')
   }
   const onDeleted = (id) => {
     setJobs(js => js.filter(j => j.id !== id))
     setEditTarget(undefined); setOpenId(null)
+    showToast('העבודה נמחקה')
   }
 
   if (!authReady) return <div style={{ minHeight: '100%' }} />
@@ -105,10 +142,12 @@ export default function App() {
       )}
 
       {loading
-        ? <div style={{ maxWidth: 1120, margin: '40px auto', padding: 16 }} className="muted">טוען…</div>
-        : view === 'board'
-          ? <Board jobs={jobs} onOpen={j => setOpenId(j.id)} onStatus={setStatus} />
-          : <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
+        ? <BoardSkeleton />
+        : <div className="fade-in" key={view}>
+            {view === 'board'
+              ? <Board jobs={jobs} onOpen={j => setOpenId(j.id)} onStatus={setStatus} />
+              : <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
+          </div>}
 
       {openJob && (
         <JobDetail
@@ -129,6 +168,7 @@ export default function App() {
       )}
 
       <MobileNav view={view} setView={setView} onNew={() => setEditTarget(null)} />
+      {toast && <Toast text={toast} />}
     </div>
   )
 }
