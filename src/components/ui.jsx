@@ -42,3 +42,19 @@ export function Thumb({ cat, size = 48, label }) {
 }
 
 export const catLabel = cat => CATEGORIES[cat] || 'פריט'
+
+export const initials = (name) => {
+  const p = (name || '').trim().split(/\s+/)
+  return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')) || '?'
+}
+
+export function EmpAvatar({ name, size = 38 }) {
+  return (
+    <span style={{
+      width: size, height: size, flex: 'none', borderRadius: 999,
+      background: 'var(--gold-bg)', color: 'var(--gold-fg)',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.36, fontWeight: 700, border: '1px solid var(--line)',
+    }}>{initials(name)}</span>
+  )
+}

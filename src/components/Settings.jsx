@@ -1,7 +1,8 @@
 import React from 'react'
 import { VERSION } from '../version.js'
+import EmployeeList from './EmployeeList.jsx'
 
-export default function Settings({ name, email, onSignOut }) {
+export default function Settings({ name, email, onSignOut, employees, onEmpSaved, onEmpDeleted }) {
   const Row = ({ label, value }) => (
     <div className="row between" style={{ padding: '13px 14px', borderTop: '1px solid var(--hair)' }}>
       <span className="t-meta">{label}</span>
@@ -25,6 +26,14 @@ export default function Settings({ name, email, onSignOut }) {
         </div>
         <Row label="חשבון" value="צוות שילה" />
         <Row label="גרסה" value={<span className="mono">{VERSION}</span>} />
+      </div>
+
+      <div className="row gap-2" style={{ margin: '4px 0 12px' }}>
+        <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />
+        <span style={{ fontWeight: 700, fontSize: 16 }}>ניהול עובדים</span>
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <EmployeeList employees={employees} onSaved={onEmpSaved} onDeleted={onEmpDeleted} />
       </div>
 
       <button className="btn" onClick={onSignOut} style={{ width: '100%', color: '#E5735B', height: 46 }}>

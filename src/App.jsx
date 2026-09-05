@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase, isConfigured } from './supabase.js'
-import { fetchJobs, updateJob } from './db.js'
+import { fetchJobs, updateJob, fetchEmployees } from './db.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
 import Calendar from './components/Calendar.jsx'
@@ -9,6 +9,7 @@ import JobEdit from './components/JobEdit.jsx'
 import Login from './components/Login.jsx'
 import MobileNav from './components/MobileNav.jsx'
 import Settings from './components/Settings.jsx'
+import Team from './components/Team.jsx'
 import ComingSoon from './components/ComingSoon.jsx'
 import { VERSION } from './version.js'
 
@@ -67,6 +68,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [authReady, setAuthReady] = useState(false)
   const [jobs, setJobs] = useState([])
+  const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(false)
   const [loadErr, setLoadErr] = useState('')
   const [view, setView] = useState('home')
@@ -91,7 +93,10 @@ export default function App() {
   // טעינת עבודות כשמחוברים
   const load = async () => {
     setLoading(true); setLoadErr('')
-    try { setJobs(await fetchJobs()) }
+    try {
+      const [j, e] = await Promise.all([fetchJobs(), fetchEmployees().catch(() => [])])
+      setJobs(j); setEmployees(e)
+    }
     catch (e) { setLoadErr(e.message || String(e)) }
     finally { setLoading(false) }
   }
@@ -120,6 +125,13 @@ export default function App() {
     setEditTarget(undefined); setOpenId(null)
     showToast('העבודה נמחקה')
   }
+
+  const onEmpSaved = (s) => {
+    setEmployees(es => (es.some(x => x.id === s.id) ? es.map(x => x.id === s.id ? s : x) : [...es, s])
+      .sort((a, b) => a.name.localeCompare(b.name, 'he')))
+    showToast('העובד נשמר')
+  }
+  const onEmpDeleted = (id) => { setEmployees(es => es.filter(x => x.id !== id)); showToast('העובד נמחק') }
 
   if (!authReady) return <div style={{ minHeight: '100%' }} />
   if (!isConfigured) return <><Setup /><VersionBadge /></>
@@ -153,12 +165,12 @@ export default function App() {
                 onOpen={j => setOpenId(j.id)} onStatus={setStatus} onEdit={j => setEditTarget(j)} />
             )}
             {view === 'calendar' && <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
-            {view === 'team' && <ComingSoon icon="team" title="שיבוץ צוות"
-              lines={['ניהול חברי הצוות ושיבוצם לאירועים.', 'מי מתקין מה, ומתי — במבט אחד.']} />}
+            {view === 'team' && <Team employees={employees} onSaved={onEmpSaved} onDeleted={onEmpDeleted} />}
             {view === 'field' && <ComingSoon icon="field" title="בשטח"
               lines={['מעקב אחרי ציוד שיצא לאירועים —', 'מה בחוץ, אצל מי, ומה חזר למחסן.']} />}
             {view === 'settings' && <Settings name={displayName(session.user?.email)}
-              email={session.user?.email} onSignOut={() => supabase.auth.signOut()} />}
+              email={session.user?.email} onSignOut={() => supabase.auth.signOut()}
+              employees={employees} onEmpSaved={onEmpSaved} onEmpDeleted={onEmpDeleted} />}
           </div>}
 
       {openJob && (

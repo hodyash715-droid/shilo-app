@@ -65,3 +65,30 @@ export async function deleteJob(id) {
   const { error } = await supabase.from('jobs').delete().eq('id', id)
   if (error) throw error
 }
+
+// ---------- עובדים ----------
+export async function fetchEmployees() {
+  const { data, error } = await supabase
+    .from('employees')
+    .select('*')
+    .order('name', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createEmployee(emp) {
+  const { data, error } = await supabase.from('employees').insert(emp).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateEmployee(id, patch) {
+  const { data, error } = await supabase.from('employees').update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteEmployee(id) {
+  const { error } = await supabase.from('employees').delete().eq('id', id)
+  if (error) throw error
+}
