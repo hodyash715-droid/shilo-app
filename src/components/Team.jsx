@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { AVAIL, AVAIL_CUSTOM, availById, shortTime, TODAY, isoLocal, fmtDate, shiftKindLabel } from '../data.js'
 import { EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
+import AvailPicker from './AvailPicker.jsx'
 
 const WD = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש']
 const startOfWeek = (d) => { const x = new Date(d); x.setDate(x.getDate() - x.getDay()); x.setHours(0, 0, 0, 0); return x }
@@ -9,7 +10,6 @@ const startOfWeek = (d) => { const x = new Date(d); x.setDate(x.getDate() - x.ge
 export default function Team({ employees, shifts, jobs, availability, onSetAvail, onShiftSaved, onShiftDeleted }) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(TODAY))
   const [picker, setPicker] = useState(null)   // {empId, date, name, current}
-  const [cust, setCust] = useState({ from: '09:00', to: '17:00' })
   const [shiftEdit, setShiftEdit] = useState(undefined)
 
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -139,10 +139,7 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
                     const a = av ? availById[av.status] : null
                     const daySh = shifts.filter(s => s.date === iso && (s.assigned || []).includes(e.id))
                     return (
-                      <button key={c} onClick={() => {
-                        setCust({ from: av?.start_time || '09:00', to: av?.end_time || '17:00' })
-                        setPicker({ empId: e.id, date: iso, name: e.name, current: av })
-                      }}
+                      <button key={c} onClick={() => setPicker({ empId: e.id, date: iso, name: e.name, current: av })}
                         style={{
                           width: CELL_W, flex: 'none', appearance: 'none', border: 0, cursor: 'pointer',
                           background: iso === todayIso ? 'rgba(238,196,33,.05)' : 'transparent',
@@ -177,58 +174,10 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
         הקש על תא כדי לקבוע זמינות. בהמשך העובדים יגישו זמינות בעצמם.
       </div>
 
-      {/* בוחר זמינות */}
       {picker && (
-        <div onClick={() => setPicker(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div onClick={e => e.stopPropagation()} className="card" style={{ width: 'min(420px,100%)', margin: 12, padding: 16, borderRadius: 16 }}>
-            <div style={{ fontWeight: 700, marginBottom: 2 }}>{picker.name}</div>
-            <div className="t-meta" style={{ marginBottom: 14 }}>{fmtDate(picker.date)}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {AVAIL.map(a => {
-                const on = picker.current?.status === a.id
-                return (
-                  <button key={a.id} className="btn" style={{
-                    justifyContent: 'flex-start', gap: 10, height: 46,
-                    borderColor: on ? a.color : 'var(--line)',
-                    background: on ? 'var(--card-2)' : 'var(--card)',
-                  }}
-                    onClick={() => { onSetAvail(picker.empId, picker.date, a.id); setPicker(null) }}>
-                    <span style={{ width: 14, height: 14, borderRadius: 4, background: a.color, flex: 'none' }} />
-                    {a.label}
-                    {on && <span style={{ marginInlineStart: 'auto', color: a.color, fontWeight: 800 }}>✓</span>}
-                  </button>
-                )
-              })}
-
-              {/* טווח שעות חופשי */}
-              <div className="row gap-2" style={{ margin: '6px 0 2px' }}>
-                <span style={{ height: 1, background: 'var(--hair)', flex: 1 }} />
-                <span className="t-meta">או שעות מדויקות</span>
-                <span style={{ height: 1, background: 'var(--hair)', flex: 1 }} />
-              </div>
-              <div className="row gap-2">
-                <div className="grow">
-                  <div className="t-meta" style={{ marginBottom: 4 }}>משעה</div>
-                  <input className="field" type="time" dir="ltr" value={cust.from}
-                    onChange={e => setCust(c => ({ ...c, from: e.target.value }))} />
-                </div>
-                <div className="grow">
-                  <div className="t-meta" style={{ marginBottom: 4 }}>עד שעה</div>
-                  <input className="field" type="time" dir="ltr" value={cust.to}
-                    onChange={e => setCust(c => ({ ...c, to: e.target.value }))} />
-                </div>
-              </div>
-              <button className="btn btn-solid" style={{ height: 46, gap: 10 }}
-                onClick={() => { onSetAvail(picker.empId, picker.date, 'custom', cust.from, cust.to); setPicker(null) }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: AVAIL_CUSTOM.color, flex: 'none' }} />
-                שמור {shortTime(cust.from)}–{shortTime(cust.to)}
-              </button>
-
-              <button className="btn btn-sm" style={{ color: 'var(--ink45)', marginTop: 4 }}
-                onClick={() => { onSetAvail(picker.empId, picker.date, null); setPicker(null) }}>נקה</button>
-            </div>
-          </div>
-        </div>
+        <AvailPicker title={picker.name} date={picker.date} current={picker.current}
+          onClose={() => setPicker(null)}
+          onPick={(status, from, to) => { onSetAvail(picker.empId, picker.date, status, from, to); setPicker(null) }} />
       )}
 
       {shiftEdit !== undefined && (() => {

@@ -4,6 +4,10 @@ import { createEmployee, updateEmployee, deleteEmployee } from '../db.js'
 const blank = () => ({ name: '', role: '', phone: '', rate: '', active: true })
 const ROLES = ['מתקין', 'נהג', 'אחראי אתר', 'כללי']
 
+// קוד קצר וברור — בלי תווים מתבלבלים (0/O, 1/I)
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const genCode = () => Array.from({ length: 6 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('')
+
 export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
   const editing = Boolean(emp && emp.id)
   const [f, setF] = useState(() => emp ? { ...blank(), ...emp } : blank())
@@ -17,7 +21,11 @@ export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
     if (!f.name.trim()) { setErr('צריך שם'); return }
     setErr(''); setBusy(true)
     try {
-      const payload = { name: f.name.trim(), role: f.role.trim(), phone: f.phone.trim(), rate: f.rate === '' ? null : Number(f.rate), active: f.active }
+      const payload = {
+        name: f.name.trim(), role: f.role.trim(), phone: f.phone.trim(),
+        rate: f.rate === '' ? null : Number(f.rate), active: f.active,
+        ...(editing ? {} : { join_code: genCode() }),
+      }
       const saved = editing ? await updateEmployee(emp.id, payload) : await createEmployee(payload)
       onSaved(saved)
     } catch (e) { setErr('שמירה נכשלה: ' + (e.message || e)); setBusy(false) }
@@ -46,6 +54,21 @@ export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
             <div className="grow">{label('טלפון')}<input className="field" dir="ltr" style={{ textAlign: 'start' }} value={f.phone} onChange={e => set('phone', e.target.value)} placeholder="050-0000000" /></div>
             <div style={{ width: 120 }}>{label('שכר לשעה (₪)')}<input className="field" type="number" dir="ltr" value={f.rate} onChange={e => set('rate', e.target.value)} placeholder="60" /></div>
           </div>
+          {editing && f.join_code && (
+            <div className="card" style={{ padding: 14, background: 'var(--card-2)' }}>
+              <div className="t-meta" style={{ marginBottom: 4 }}>קוד הצטרפות לאפליקציה</div>
+              <div className="mono" style={{
+                fontSize: 26, fontWeight: 700, letterSpacing: '.16em',
+                color: 'var(--gold)', textAlign: 'center', padding: '6px 0',
+              }}>{f.join_code}</div>
+              <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, textAlign: 'center' }}>
+                {f.user_id
+                  ? '✓ העובד כבר מחובר לאפליקציה'
+                  : 'שלח את הקוד לעובד. הוא יפתח את האפליקציה, ילחץ "יש לי קוד הצטרפות" ויבחר סיסמה.'}
+              </div>
+            </div>
+          )}
+
           {err && <div style={{ color: '#E5735B', fontSize: 13, fontWeight: 500 }}>{err}</div>}
         </div>
 

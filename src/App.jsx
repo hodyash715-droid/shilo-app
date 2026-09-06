@@ -14,6 +14,7 @@ import MobileNav from './components/MobileNav.jsx'
 import Settings from './components/Settings.jsx'
 import Team from './components/Team.jsx'
 import Field from './components/Field.jsx'
+import WorkerApp from './components/WorkerApp.jsx'
 import { VERSION } from './version.js'
 
 const displayName = (email) => ({ shai: 'שי' })[(email || '').split('@')[0]] || (email || '').split('@')[0] || 'שי'
@@ -76,6 +77,7 @@ export default function App() {
   const [inventory, setInventory] = useState([])
   const [availability, setAvailabilityState] = useState([])
   const [loading, setLoading] = useState(false)
+  const [dataReady, setDataReady] = useState(false)
   const [loadErr, setLoadErr] = useState('')
   const [view, setView] = useState('home')
   const [openId, setOpenId] = useState(null)
@@ -110,7 +112,7 @@ export default function App() {
       setJobs(j); setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av)
     }
     catch (e) { setLoadErr(e.message || String(e)) }
-    finally { setLoading(false) }
+    finally { setLoading(false); setDataReady(true) }
   }
   useEffect(() => { if (session) load() }, [session])
 
@@ -187,6 +189,18 @@ export default function App() {
   if (!authReady) return <div style={{ minHeight: '100%' }} />
   if (!isConfigured) return <><Setup /><VersionBadge /></>
   if (!session) return <><Login /><VersionBadge /></>
+  if (!dataReady) return <><BoardSkeleton /><VersionBadge /></>
+
+  // עובד = יש כרטיס עובד המקושר לחשבון הזה. אחרת — מנהל.
+  const me = employees.find(e => e.user_id === session.user?.id) || null
+  if (me) return (
+    <>
+      <WorkerApp me={me} jobs={jobs} shifts={shifts} availability={availability}
+        onSetAvail={onSetAvail} onSignOut={() => supabase.auth.signOut()} />
+      <VersionBadge />
+      {toast && <Toast text={toast} />}
+    </>
+  )
 
   return (
     <div className="pad-tabbar" style={{ minHeight: '100%', paddingBottom: 40 }}>

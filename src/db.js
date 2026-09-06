@@ -93,6 +93,29 @@ export async function deleteEmployee(id) {
   if (error) throw error
 }
 
+// העובד שמשויך למשתמש המחובר (null = מנהל)
+export async function fetchEmployeeByUser(userId) {
+  const { data, error } = await supabase
+    .from('employees').select('*').eq('user_id', userId).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+// חיפוש עובד לפי קוד הצטרפות (נקרא אחרי ההרשמה)
+export async function findEmployeeByCode(code) {
+  const { data, error } = await supabase
+    .from('employees').select('*').eq('join_code', code.toUpperCase()).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function linkEmployeeToUser(empId, userId) {
+  const { data, error } = await supabase
+    .from('employees').update({ user_id: userId }).eq('id', empId).select().single()
+  if (error) throw error
+  return data
+}
+
 // ---------- משמרות ----------
 export async function fetchShifts() {
   const { data, error } = await supabase

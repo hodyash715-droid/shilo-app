@@ -30,7 +30,14 @@ export default function EmployeeList({ employees, onSaved, onDeleted }) {
                 <div style={{ fontWeight: 600, fontSize: 15 }} className="truncate">{e.name}</div>
                 <div className="t-meta truncate">{e.role || 'ללא תפקיד'}{e.phone ? ` · ${e.phone}` : ''}</div>
               </div>
-              {e.rate != null && <div className="mono t-meta" style={{ flex: 'none' }}>{e.rate}₪/שעה</div>}
+              <div style={{ flex: 'none', textAlign: 'end' }}>
+                {e.rate != null && <div className="mono t-meta">{e.rate}₪/שעה</div>}
+                {e.join_code && (
+                  <div className="mono" style={{ fontSize: 10.5, fontWeight: 700, marginTop: 2, letterSpacing: '.08em', color: e.user_id ? 'var(--go)' : 'var(--gold)' }}>
+                    {e.user_id ? '✓ מחובר' : e.join_code}
+                  </div>
+                )}
+              </div>
             </button>
           ))}
         </div>
