@@ -7,7 +7,7 @@ const blank = () => ({
   items: [], team: [], note: '',
 })
 
-export default function JobEdit({ job, onClose, onSaved, onDeleted }) {
+export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = [] }) {
   const editing = Boolean(job && job.id)
   const [f, setF] = useState(() => job ? { ...blank(), ...job } : blank())
   const [busy, setBusy] = useState(false)
@@ -65,6 +65,7 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted }) {
           <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="סגור">✕</button>
         </div>
 
+        <datalist id="invnames">{inventory.map(iv => <option key={iv.id} value={iv.name} />)}</datalist>
         <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>{label('שם העבודה')}<input className="field" value={f.title} onChange={e => set('title', e.target.value)} placeholder="בר מצווה — אולם הגן" /></div>
           <div className="row gap-3">
@@ -95,7 +96,7 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted }) {
                         <select className="field" style={{ height: 38, width: 110 }} value={it.cat} onChange={e => setItem(i, 'cat', e.target.value)}>
                           {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                         </select>
-                        <input className="field grow" style={{ height: 38 }} value={it.name} onChange={e => setItem(i, 'name', e.target.value)} placeholder="תיאור הפריט" />
+                        <input className="field grow" style={{ height: 38 }} value={it.name} onChange={e => setItem(i, 'name', e.target.value)} placeholder="תיאור הפריט" list="invnames" />
                         <button className="btn btn-ghost btn-sm" onClick={() => delItem(i)} type="button" aria-label="מחק">✕</button>
                       </div>
                       <div className="row gap-2">

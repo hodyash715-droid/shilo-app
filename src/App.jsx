@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase, isConfigured } from './supabase.js'
-import { fetchJobs, updateJob, fetchEmployees, fetchShifts } from './db.js'
+import { fetchJobs, updateJob, fetchEmployees, fetchShifts, fetchInventory } from './db.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
 import Calendar from './components/Calendar.jsx'
@@ -10,7 +10,7 @@ import Login from './components/Login.jsx'
 import MobileNav from './components/MobileNav.jsx'
 import Settings from './components/Settings.jsx'
 import Team from './components/Team.jsx'
-import ComingSoon from './components/ComingSoon.jsx'
+import Field from './components/Field.jsx'
 import { VERSION } from './version.js'
 
 const displayName = (email) => ({ shai: 'שי' })[(email || '').split('@')[0]] || (email || '').split('@')[0] || 'שי'
@@ -70,6 +70,7 @@ export default function App() {
   const [jobs, setJobs] = useState([])
   const [employees, setEmployees] = useState([])
   const [shifts, setShifts] = useState([])
+  const [inventory, setInventory] = useState([])
   const [loading, setLoading] = useState(false)
   const [loadErr, setLoadErr] = useState('')
   const [view, setView] = useState('home')
@@ -95,8 +96,13 @@ export default function App() {
   const load = async () => {
     setLoading(true); setLoadErr('')
     try {
-      const [j, e, sh] = await Promise.all([fetchJobs(), fetchEmployees().catch(() => []), fetchShifts().catch(() => [])])
-      setJobs(j); setEmployees(e); setShifts(sh)
+      const [j, e, sh, inv] = await Promise.all([
+        fetchJobs(),
+        fetchEmployees().catch(() => []),
+        fetchShifts().catch(() => []),
+        fetchInventory().catch(() => []),
+      ])
+      setJobs(j); setEmployees(e); setShifts(sh); setInventory(inv)
     }
     catch (e) { setLoadErr(e.message || String(e)) }
     finally { setLoading(false) }
@@ -140,6 +146,24 @@ export default function App() {
   }
   const onShiftDeleted = (id) => { setShifts(ss => ss.filter(x => x.id !== id)); showToast('המשמרת נמחקה') }
 
+  // החזרת ציוד למחסן
+  const markReturned = async (jobId, which) => {
+    const job = jobs.find(j => j.id === jobId)
+    if (!job) return
+    const items = job.items.map((it, i) => (which === 'all' || i === which) ? { ...it, returned: true } : it)
+    setJobs(js => js.map(j => j.id === jobId ? { ...j, items } : j))
+    showToast(which === 'all' ? 'הכל חזר למחסן' : 'הפריט חזר למחסן')
+    try { await updateJob(jobId, { items }) }
+    catch (e) { showToast('עדכון נכשל'); load() }
+  }
+
+  const onInvSaved = (s) => {
+    setInventory(xs => (xs.some(x => x.id === s.id) ? xs.map(x => x.id === s.id ? s : x) : [...xs, s])
+      .sort((a, b) => a.name.localeCompare(b.name, 'he')))
+    showToast('הפריט נשמר')
+  }
+  const onInvDeleted = (id) => { setInventory(xs => xs.filter(x => x.id !== id)); showToast('הפריט נמחק') }
+
   if (!authReady) return <div style={{ minHeight: '100%' }} />
   if (!isConfigured) return <><Setup /><VersionBadge /></>
   if (!session) return <><Login /><VersionBadge /></>
@@ -174,8 +198,10 @@ export default function App() {
             )}
             {view === 'calendar' && <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
             {view === 'team' && <Team employees={employees} onSaved={onEmpSaved} onDeleted={onEmpDeleted} />}
-            {view === 'field' && <ComingSoon icon="field" title="בשטח"
-              lines={['מעקב אחרי ציוד שיצא לאירועים —', 'מה בחוץ, אצל מי, ומה חזר למחסן.']} />}
+            {view === 'field' && <Field jobs={jobs} shifts={shifts} inventory={inventory}
+              onItemReturn={(jobId, i) => markReturned(jobId, i)}
+              onAllReturned={(jobId) => markReturned(jobId, 'all')}
+              onInvSaved={onInvSaved} onInvDeleted={onInvDeleted} />}
             {view === 'settings' && <Settings name={displayName(session.user?.email)}
               email={session.user?.email} onSignOut={() => supabase.auth.signOut()}
               employees={employees} onEmpSaved={onEmpSaved} onEmpDeleted={onEmpDeleted} />}
@@ -198,6 +224,7 @@ export default function App() {
           onClose={() => setEditTarget(undefined)}
           onSaved={onSaved}
           onDeleted={onDeleted}
+          inventory={inventory}
         />
       )}
 

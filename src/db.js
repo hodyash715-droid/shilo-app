@@ -119,3 +119,30 @@ export async function deleteShift(id) {
   const { error } = await supabase.from('shifts').delete().eq('id', id)
   if (error) throw error
 }
+
+// ---------- מלאי ----------
+export async function fetchInventory() {
+  const { data, error } = await supabase
+    .from('inventory')
+    .select('*')
+    .order('name', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createInvItem(it) {
+  const { data, error } = await supabase.from('inventory').insert(it).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateInvItem(id, patch) {
+  const { data, error } = await supabase.from('inventory').update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteInvItem(id) {
+  const { error } = await supabase.from('inventory').delete().eq('id', id)
+  if (error) throw error
+}
