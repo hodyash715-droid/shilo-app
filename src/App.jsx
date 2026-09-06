@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase, isConfigured } from './supabase.js'
-import { fetchJobs, updateJob, fetchEmployees } from './db.js'
+import { fetchJobs, updateJob, fetchEmployees, fetchShifts } from './db.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
 import Calendar from './components/Calendar.jsx'
@@ -69,6 +69,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false)
   const [jobs, setJobs] = useState([])
   const [employees, setEmployees] = useState([])
+  const [shifts, setShifts] = useState([])
   const [loading, setLoading] = useState(false)
   const [loadErr, setLoadErr] = useState('')
   const [view, setView] = useState('home')
@@ -94,8 +95,8 @@ export default function App() {
   const load = async () => {
     setLoading(true); setLoadErr('')
     try {
-      const [j, e] = await Promise.all([fetchJobs(), fetchEmployees().catch(() => [])])
-      setJobs(j); setEmployees(e)
+      const [j, e, sh] = await Promise.all([fetchJobs(), fetchEmployees().catch(() => []), fetchShifts().catch(() => [])])
+      setJobs(j); setEmployees(e); setShifts(sh)
     }
     catch (e) { setLoadErr(e.message || String(e)) }
     finally { setLoading(false) }
@@ -133,6 +134,12 @@ export default function App() {
   }
   const onEmpDeleted = (id) => { setEmployees(es => es.filter(x => x.id !== id)); showToast('העובד נמחק') }
 
+  const onShiftSaved = (s) => {
+    setShifts(ss => ss.some(x => x.id === s.id) ? ss.map(x => x.id === s.id ? s : x) : [...ss, s])
+    showToast('המשמרת נשמרה')
+  }
+  const onShiftDeleted = (id) => { setShifts(ss => ss.filter(x => x.id !== id)); showToast('המשמרת נמחקה') }
+
   if (!authReady) return <div style={{ minHeight: '100%' }} />
   if (!isConfigured) return <><Setup /><VersionBadge /></>
   if (!session) return <><Login /><VersionBadge /></>
@@ -162,7 +169,8 @@ export default function App() {
         : <div className="fade-in" key={view}>
             {view === 'home' && (
               <Home jobs={jobs} name={displayName(session.user?.email)}
-                onOpen={j => setOpenId(j.id)} onStatus={setStatus} onEdit={j => setEditTarget(j)} />
+                onOpen={j => setOpenId(j.id)} onStatus={setStatus} onEdit={j => setEditTarget(j)}
+                shifts={shifts} employees={employees} />
             )}
             {view === 'calendar' && <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
             {view === 'team' && <Team employees={employees} onSaved={onEmpSaved} onDeleted={onEmpDeleted} />}
@@ -179,6 +187,8 @@ export default function App() {
           onClose={() => setOpenId(null)}
           onStatus={setStatus}
           onEdit={() => setEditTarget(openJob)}
+          shifts={shifts} employees={employees}
+          onShiftSaved={onShiftSaved} onShiftDeleted={onShiftDeleted}
         />
       )}
 

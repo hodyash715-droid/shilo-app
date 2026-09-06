@@ -92,3 +92,30 @@ export async function deleteEmployee(id) {
   const { error } = await supabase.from('employees').delete().eq('id', id)
   if (error) throw error
 }
+
+// ---------- משמרות ----------
+export async function fetchShifts() {
+  const { data, error } = await supabase
+    .from('shifts')
+    .select('*')
+    .order('date', { ascending: true })
+  if (error) throw error
+  return data.map(r => ({ ...r, assigned: Array.isArray(r.assigned) ? r.assigned : [] }))
+}
+
+export async function createShift(sh) {
+  const { data, error } = await supabase.from('shifts').insert(sh).select().single()
+  if (error) throw error
+  return { ...data, assigned: data.assigned || [] }
+}
+
+export async function updateShift(id, patch) {
+  const { data, error } = await supabase.from('shifts').update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return { ...data, assigned: data.assigned || [] }
+}
+
+export async function deleteShift(id) {
+  const { error } = await supabase.from('shifts').delete().eq('id', id)
+  if (error) throw error
+}

@@ -15,6 +15,13 @@ export const STATUSES = [
 export const statusById = Object.fromEntries(STATUSES.map(s => [s.id, s]))
 export const statusIndex = id => STATUSES.findIndex(s => s.id === id)
 
+// סוגי משמרת
+export const SHIFT_KINDS = [
+  { id: 'setup', label: 'הקמה' },
+  { id: 'teardown', label: 'פירוק' },
+]
+export const shiftKindLabel = k => (SHIFT_KINDS.find(s => s.id === k) || {}).label || 'משמרת'
+
 // קטגוריות פריטים
 export const CATEGORIES = {
   backdrop: 'קוליסה',

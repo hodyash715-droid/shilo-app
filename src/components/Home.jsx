@@ -1,5 +1,6 @@
 import React from 'react'
-import { daysUntil, relLabel } from '../data.js'
+import { daysUntil, relLabel, shiftKindLabel } from '../data.js'
+import { EmpAvatar } from './ui.jsx'
 import Board from './Board.jsx'
 
 const greeting = () => {
@@ -66,7 +67,53 @@ function InboxRow({ job, need, onOpen, act }) {
   )
 }
 
-export default function Home({ jobs, name, onOpen, onStatus, onEdit }) {
+function Today({ shifts, jobs, employees, onOpen }) {
+  const today = (shifts || []).filter(s => s.date && daysUntil(s.date) === 0)
+    .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+  if (today.length === 0) return null
+  return (
+    <div style={{ marginBottom: 26 }}>
+      <div className="row between" style={{ marginBottom: 10 }}>
+        <div className="row gap-2">
+          <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />
+          <span style={{ fontWeight: 700, fontSize: 16 }}>לוח היום</span>
+        </div>
+        <span className="t-meta">{today.length} משמרות</span>
+      </div>
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {today.map((sh, i) => {
+          const job = jobs.find(j => j.id === sh.job_id)
+          const crew = sh.assigned.map(id => employees.find(e => e.id === id)).filter(Boolean)
+          const teardown = sh.kind === 'teardown'
+          return (
+            <button key={sh.id} onClick={() => job && onOpen(job)} style={{
+              appearance: 'none', border: 0, width: '100%', textAlign: 'start', cursor: 'pointer',
+              background: 'transparent', color: 'var(--ink)', font: 'inherit',
+              padding: 12, display: 'flex', alignItems: 'center', gap: 12, borderTop: i ? '1px solid var(--hair)' : 0,
+            }}>
+              <div style={{ flex: 'none', textAlign: 'center', width: 52 }}>
+                <div className="mono" style={{ fontSize: 15, fontWeight: 700 }}>{sh.start_time}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: teardown ? '#E5735B' : 'var(--gold)' }}>{shiftKindLabel(sh.kind)}</div>
+              </div>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--hair)' }} />
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14.5 }} className="truncate">{job ? job.title || job.client : 'עבודה'}</div>
+                <div className="t-meta truncate">{job?.client}</div>
+              </div>
+              <div className="row" style={{ flex: 'none' }}>
+                {crew.length
+                  ? crew.slice(0, 3).map((e, k) => <span key={e.id} style={{ marginInlineStart: k ? -6 : 0 }}><EmpAvatar name={e.name} size={26} /></span>)
+                  : <span className="chip chip-signal">חסר צוות</span>}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export default function Home({ jobs, name, onOpen, onStatus, onEdit, shifts, employees }) {
   const inbox = jobs
     .map(j => ({ job: j, need: needOf(j) }))
     .filter(x => x.need)
@@ -104,6 +151,8 @@ export default function Home({ jobs, name, onOpen, onStatus, onEdit }) {
           ))}
         </div>
       )}
+
+      <Today shifts={shifts} jobs={jobs} employees={employees} onOpen={onOpen} />
 
       {/* כל העבודות */}
       <div className="row gap-2" style={{ marginBottom: 4 }}>
