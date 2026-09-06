@@ -16,6 +16,7 @@ export default function InventoryEdit({ item, onClose, onSaved, onDeleted }) {
     setErr(''); setBusy(true)
     try {
       const payload = { name: f.name.trim(), total: Number(f.total) || 0, category: f.category }
+      if (f.category === 'material') payload.stock_len = Number(f.stock_len) || null
       const saved = editing ? await updateInvItem(item.id, payload) : await createInvItem(payload)
       onSaved(saved)
     } catch (e) { setErr('שמירה נכשלה: ' + (e.message || e)); setBusy(false) }
@@ -44,9 +45,22 @@ export default function InventoryEdit({ item, onClose, onSaved, onDeleted }) {
               </select>
             </div>
           </div>
-          <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
-            טיפ: כשתשתמש באותו שם בדיוק בפריטי העבודה, המערכת תדע לספור כמה יחידות בחוץ.
-          </div>
+          {f.category === 'material' ? (
+            <>
+              <div>{label('אורך קורה סטנדרטי (ס״מ)')}
+                <input className="field mono" type="number" min="0" dir="ltr"
+                  value={f.stock_len ?? ''} onChange={e => set('stock_len', e.target.value)} placeholder="300" />
+              </div>
+              <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+                טיפ: כתוב את החתך בשם הפריט — למשל <b>לטה 2×3</b>. המעצב מצייר לפי זה,
+                ומחשב כמה קורות צריך לקנות.
+              </div>
+            </>
+          ) : (
+            <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+              טיפ: כשתשתמש באותו שם בדיוק בפריטי העבודה, המערכת תדע לספור כמה יחידות בחוץ.
+            </div>
+          )}
           {err && <div style={{ color: '#E5735B', fontSize: 13, fontWeight: 500 }}>{err}</div>}
         </div>
 

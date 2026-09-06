@@ -65,6 +65,7 @@ export const CATEGORIES = {
   carpet:   'שטיח',
   sign:     'שלט כאפות',
   print:    'הדפסה',
+  material: 'חומר גלם',
   other:    'אחר',
 }
 

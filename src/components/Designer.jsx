@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { DIMS, render, hitTest, lenOf } from '../designer/geometry.js'
 import { cutList, optimize, DEFAULT_STOCK } from '../designer/cuts.js'
+import { materialsFor } from '../designer/materials.js'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const AXES = [
@@ -25,7 +26,7 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
   const [panel, setPanel] = useState(null)   // null | 'cuts' | 'load'
   const [stockOv, setStockOv] = useState({})
 
-  const materials = inventory
+  const materials = React.useMemo(() => materialsFor(inventory), [inventory])
   const selPart = parts.find(p => p.id === sel) || null
 
   // ציור מחדש בכל שינוי
@@ -175,18 +176,24 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
       {panel === 'add' && (
         <div className="card" style={{ marginTop: 12, overflow: 'hidden' }}>
           <div className="row between" style={{ padding: 12, borderBottom: '1px solid var(--hair)' }}>
-            <span style={{ fontWeight: 700 }}>בחר חומר</span>
+            <span style={{ fontWeight: 700 }}>בחר חומר גלם</span>
             <button className="btn btn-ghost btn-sm" onClick={() => setPanel(null)}>✕</button>
           </div>
-          {materials.length === 0
-            ? <div className="muted" style={{ padding: 16, fontSize: 13 }}>אין חומרים במלאי. הוסף פריטים בטאב "בשטח".</div>
-            : materials.map((m, i) => (
-              <button key={m.id} onClick={() => addPart(m.id)} style={{
-                appearance: 'none', border: 0, width: '100%', textAlign: 'start', cursor: 'pointer',
-                background: 'transparent', color: 'var(--ink)', font: 'inherit', padding: 11,
-                borderTop: i ? '1px solid var(--hair)' : 0,
-              }}>{m.name}</button>
-            ))}
+          {materials.map((m, i) => (
+            <button key={m.id} onClick={() => addPart(m.id)} className="row between gap-2" style={{
+              appearance: 'none', border: 0, width: '100%', textAlign: 'start', cursor: 'pointer',
+              background: 'transparent', color: 'var(--ink)', font: 'inherit', padding: 11,
+              borderTop: i ? '1px solid var(--hair)' : 0,
+            }}>
+              <span>{m.name}</span>
+              <span className="t-meta mono">
+                {m.stock_len || DEFAULT_STOCK}{String(m.id).startsWith('std:') ? '' : ' ★'}
+              </span>
+            </button>
+          ))}
+          <div className="muted" style={{ padding: '10px 12px', fontSize: 12, borderTop: '1px solid var(--hair)' }}>
+            החומרים שלך (★) נוספים בטאב "בשטח" בקטגוריה <b>חומר גלם</b>. השאר — פרופילים סטנדרטיים.
+          </div>
         </div>
       )}
 
