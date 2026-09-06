@@ -213,7 +213,7 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
                   color: 'var(--ink)', font: 'inherit', textAlign: 'start', flex: 1, minWidth: 0,
                 }}>
                   <div style={{ fontWeight: 600 }} className="truncate">{k.name}</div>
-                  <div className="t-meta">{(k.parts || []).length} חלקים · {k.preview?.גובה}×{k.preview?.רוחב}</div>
+                  <div className="t-meta">{(k.parts || []).length} חלקים · <span className="mono">{k.preview?.גובה}×{k.preview?.רוחב}</span></div>
                 </button>
                 <button className="btn btn-ghost btn-sm" style={{ color: '#E5735B' }} onClick={() => onDelete(k.id)}>✕</button>
               </div>
@@ -269,7 +269,7 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
         <div className="card" style={{ marginTop: 12, padding: 14 }}>
           <div className="row between" style={{ marginBottom: 10 }}>
             <span style={{ fontWeight: 700 }}>✂️ תוכנית חיתוך</span>
-            <span className="t-meta">{dims.גובה}×{dims.רוחב}×{dims.עומק}</span>
+            <span className="t-meta mono">{dims.גובה}×{dims.רוחב}×{dims.עומק}</span>
           </div>
 
           {plans.length === 0 ? (
