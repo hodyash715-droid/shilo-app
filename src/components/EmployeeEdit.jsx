@@ -14,6 +14,7 @@ export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
+  const [copied, setCopied] = useState(false)
   const set = (k, v) => setF(s => ({ ...s, [k]: v }))
   const label = t => <div className="t-meta" style={{ marginBottom: 6 }}>{t}</div>
 
@@ -57,10 +58,15 @@ export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
           {editing && f.join_code && (
             <div className="card" style={{ padding: 14, background: 'var(--card-2)' }}>
               <div className="t-meta" style={{ marginBottom: 4 }}>קוד הצטרפות לאפליקציה</div>
-              <div className="mono" style={{
-                fontSize: 26, fontWeight: 700, letterSpacing: '.16em',
-                color: 'var(--gold)', textAlign: 'center', padding: '6px 0',
-              }}>{f.join_code}</div>
+              <button type="button" className="mono" title="העתק"
+                onClick={() => { try { navigator.clipboard.writeText(f.join_code); setCopied(true); setTimeout(() => setCopied(false), 1600) } catch { } }}
+                style={{
+                  width: '100%', appearance: 'none', cursor: 'pointer',
+                  background: 'transparent', border: '1px dashed var(--line)', borderRadius: 10,
+                  fontSize: 26, fontWeight: 700, letterSpacing: '.16em',
+                  color: 'var(--gold)', textAlign: 'center', padding: '8px 0', margin: '4px 0 8px',
+                }}>{f.join_code}</button>
+              {copied && <div style={{ textAlign: 'center', color: 'var(--go)', fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>הקוד הועתק ✓</div>}
               <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, textAlign: 'center' }}>
                 {f.user_id
                   ? '✓ העובד כבר מחובר לאפליקציה'

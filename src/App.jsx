@@ -3,6 +3,7 @@ import { supabase, isConfigured } from './supabase.js'
 import {
   fetchJobs, updateJob, fetchEmployees, fetchShifts, fetchInventory,
   fetchAvailability, setAvailability as saveAvailability, clearAvailability,
+  findEmployeeByCode, linkEmployeeToUser,
 } from './db.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
@@ -18,6 +19,25 @@ import WorkerApp from './components/WorkerApp.jsx'
 import { VERSION } from './version.js'
 
 const displayName = (email) => ({ shai: 'שי' })[(email || '').split('@')[0]] || (email || '').split('@')[0] || 'שי'
+
+// חשבונות מנהל. כל חשבון אחר הוא עובד — וללא כרטיס עובד מקושר אין גישה.
+const MANAGERS = ['shai@shilo.app']
+
+function NotLinked({ email, onSignOut }) {
+  return (
+    <div style={{ minHeight: '100%', display: 'grid', placeItems: 'center', padding: 24, textAlign: 'center' }}>
+      <div style={{ maxWidth: 380 }}>
+        <div className="brand-mark" style={{ margin: '0 auto 16px' }}>ש</div>
+        <div className="t-h2" style={{ marginBottom: 8 }}>החשבון לא מקושר לעובד</div>
+        <div className="muted" style={{ lineHeight: 1.7 }}>
+          החשבון <span className="mono">{email}</span> אינו משויך לכרטיס עובד.
+          בקש משי קוד הצטרפות מעודכן.
+        </div>
+        <button className="btn" style={{ marginTop: 20 }} onClick={onSignOut}>יציאה</button>
+      </div>
+    </div>
+  )
+}
 
 const VersionBadge = () => (
   <div className="mono version-badge" style={{
@@ -116,6 +136,25 @@ export default function App() {
   }
   useEffect(() => { if (session) load() }, [session])
 
+  // קישור עצמי: עובד שנכנס עם הקוד שלו ועדיין לא מקושר — נקשר אוטומטית
+  useEffect(() => {
+    if (!session || !dataReady) return
+    const email = (session.user?.email || '').toLowerCase()
+    if (MANAGERS.includes(email)) return
+    if (employees.some(e => e.user_id === session.user?.id)) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const emp = await findEmployeeByCode(email.split('@')[0].toUpperCase())
+        if (!cancelled && emp && !emp.user_id) {
+          await linkEmployeeToUser(emp.id, session.user.id)
+          load()
+        }
+      } catch (e) { /* אין קוד תואם — יוצג מסך "לא מקושר" */ }
+    })()
+    return () => { cancelled = true }
+  }, [session, dataReady, employees])
+
   const openJob = jobs.find(j => j.id === openId) || null
 
   const setStatus = async (id, statusId) => {
@@ -191,16 +230,22 @@ export default function App() {
   if (!session) return <><Login /><VersionBadge /></>
   if (!dataReady) return <><BoardSkeleton /><VersionBadge /></>
 
-  // עובד = יש כרטיס עובד המקושר לחשבון הזה. אחרת — מנהל.
+  // תפקיד: מנהל רק לפי רשימה מפורשת. כל השאר — עובד.
+  const email = (session.user?.email || '').toLowerCase()
+  const isManager = MANAGERS.includes(email)
   const me = employees.find(e => e.user_id === session.user?.id) || null
-  if (me) return (
-    <>
-      <WorkerApp me={me} jobs={jobs} shifts={shifts} availability={availability}
-        onSetAvail={onSetAvail} onSignOut={() => supabase.auth.signOut()} />
-      <VersionBadge />
-      {toast && <Toast text={toast} />}
-    </>
-  )
+
+  if (!isManager) {
+    if (!me) return <><NotLinked email={email} onSignOut={() => supabase.auth.signOut()} /><VersionBadge /></>
+    return (
+      <>
+        <WorkerApp me={me} jobs={jobs} shifts={shifts} availability={availability}
+          onSetAvail={onSetAvail} onSignOut={() => supabase.auth.signOut()} />
+        <VersionBadge />
+        {toast && <Toast text={toast} />}
+      </>
+    )
+  }
 
   return (
     <div className="pad-tabbar" style={{ minHeight: '100%', paddingBottom: 40 }}>

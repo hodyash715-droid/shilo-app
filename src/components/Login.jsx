@@ -44,17 +44,22 @@ export default function Login() {
     setBusy(true)
     try {
       const email = `${c.toLowerCase()}@shilo.app`
-      const { error: upErr } = await supabase.auth.signUp({ email, password: pass })
+      const { data: up, error: upErr } = await supabase.auth.signUp({ email, password: pass })
       if (upErr) {
         setBusy(false)
-        setErr(/already|exists/i.test(upErr.message)
+        setErr(/already|exists|registered/i.test(upErr.message)
           ? 'הקוד הזה כבר בשימוש. התחבר עם הקוד והסיסמה שלך.'
           : 'ההרשמה נכשלה: ' + upErr.message)
         return
       }
-      // מחוברים — מקשרים את החשבון לכרטיס העובד
-      const { data: sess } = await supabase.auth.getSession()
-      const uid = sess?.session?.user?.id
+      // מוודאים סשן פעיל (יש הגדרות שבהן signUp לא מחבר אוטומטית)
+      let uid = up?.user?.id
+      if (!up?.session) {
+        const { data: si, error: siErr } = await supabase.auth.signInWithPassword({ email, password: pass })
+        if (siErr) { setBusy(false); setErr('ההרשמה הצליחה אך הכניסה נכשלה. נסה להתחבר עם הקוד והסיסמה.'); return }
+        uid = si?.user?.id
+      }
+      // מקשרים את החשבון לכרטיס העובד
       const emp = await findEmployeeByCode(c)
       if (!emp) {
         await supabase.auth.signOut()
@@ -63,10 +68,10 @@ export default function Login() {
       }
       if (emp.user_id && emp.user_id !== uid) {
         await supabase.auth.signOut()
-        setBusy(false); setErr('הקוד הזה כבר שויך לעובד אחר.')
+        setBusy(false); setErr('הקוד הזה כבר שויך לחשבון אחר.')
         return
       }
-      await linkEmployeeToUser(emp.id, uid)
+      if (!emp.user_id) await linkEmployeeToUser(emp.id, uid)
       window.location.reload()
     } catch (e2) {
       setBusy(false); setErr('ההרשמה נכשלה: ' + (e2.message || e2))
