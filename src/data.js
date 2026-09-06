@@ -15,6 +15,20 @@ export const STATUSES = [
 export const statusById = Object.fromEntries(STATUSES.map(s => [s.id, s]))
 export const statusIndex = id => STATUSES.findIndex(s => s.id === id)
 
+// ציר הצעת המחיר — נפרד לגמרי מציר העבודה
+export const QUOTES = [
+  { id: 'none',        label: 'ללא הצעה',            short: '—',            color: '#8A8474' },
+  { id: 'needs_quote', label: 'יש לשלוח הצעת מחיר',  short: 'לשלוח הצעה',   color: '#EEC421' },
+  { id: 'sent',        label: 'ממתין לאישור הלקוח',  short: 'ממתין ללקוח',  color: '#D9822B' },
+  { id: 'approved',    label: 'הצעת המחיר אושרה',    short: 'אושרה',        color: '#3E9C68' },
+  { id: 'rejected',    label: 'ההצעה נדחתה',         short: 'נדחתה',        color: '#A8382A' },
+]
+export const quoteById = Object.fromEntries(QUOTES.map(q => [q.id, q]))
+export const quoteOf = j => quoteById[j?.quoteStatus || 'none'] || quoteById.none
+export const quoteApproved = j => j?.quoteStatus === 'approved'
+// עבודה "פתוחה כספית": יש הזמנה שעדיין לא אושרה
+export const quoteOpen = j => ['needs_quote', 'sent', 'rejected'].includes(j?.quoteStatus)
+
 // סוגי משמרת
 export const SHIFT_KINDS = [
   { id: 'setup', label: 'הקמה' },
@@ -89,3 +103,11 @@ export function isUrgent(job) {
 }
 
 export const ils = n => `${(Number(n) || 0).toLocaleString('en-US')}₪`
+
+// קישור וואטסאפ עם הודעה מוכנה (0521234567 → 972521234567)
+export function waLink(phone, text) {
+  const d = String(phone || '').replace(/\D/g, '')
+  if (!d) return null
+  const intl = d.startsWith('0') ? '972' + d.slice(1) : d
+  return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`
+}

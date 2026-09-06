@@ -191,6 +191,17 @@ export default function App() {
   }
   const onShiftDeleted = (id) => { setShifts(ss => ss.filter(x => x.id !== id)); showToast('המשמרת נמחקה') }
 
+  // ציר הצעת המחיר
+  const onQuote = async (jobId, status) => {
+    const patch = { quoteStatus: status }
+    if (status === 'sent') patch.quoteSentAt = new Date().toISOString()
+    if (status === 'approved' || status === 'rejected') patch.quoteDecidedAt = new Date().toISOString()
+    setJobs(js => js.map(j => (j.id === jobId ? { ...j, ...patch } : j)))
+    showToast(status === 'approved' ? 'ההצעה אושרה' : status === 'sent' ? 'סומן: ההצעה נשלחה' : 'הסטטוס עודכן')
+    try { await updateJob(jobId, patch) }
+    catch (e) { showToast('עדכון נכשל'); load() }
+  }
+
   // החזרת ציוד למחסן
   const markReturned = async (jobId, which) => {
     const job = jobs.find(j => j.id === jobId)
@@ -295,6 +306,7 @@ export default function App() {
           onEdit={() => setEditTarget(openJob)}
           shifts={shifts} employees={employees}
           onShiftSaved={onShiftSaved} onShiftDeleted={onShiftDeleted}
+          onQuote={onQuote}
         />
       )}
 

@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
-import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel } from '../data.js'
+import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel, quoteOf, waLink } from '../data.js'
 import { Thumb, catLabel, EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
 
-export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, onShiftSaved, onShiftDeleted }) {
+export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, onShiftSaved, onShiftDeleted, onQuote }) {
   const [shiftEdit, setShiftEdit] = useState(undefined) // undefined=closed, null=new, shift=edit
   if (!job) return null
   const curIdx = statusIndex(job.status)
@@ -52,6 +52,46 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
               ? <button className="btn btn-sm btn-solid" onClick={() => onStatus(job.id, next.id)}>קדם ל“{next.label}” ←</button>
               : <span className="chip chip-go"><span className="chip-dot" />הושלם</span>}
           </div>
+
+          {/* הצעת מחיר */}
+          {(() => {
+            const q = quoteOf(job)
+            const msg = `שלום ${job.client},\nמצורפת הצעת מחיר לאירוע "${job.title}" בתאריך ${fmtDate(job.eventDate)}.\nסה״כ: ${ils(job.price || itemsTotal)}\nנשמח לאישורך.`
+            const wa = waLink(job.contact, msg)
+            return (
+              <>
+                <div className="t-meta" style={{ marginBottom: 8 }}>הצעת מחיר</div>
+                <div style={{
+                  background: 'var(--card-2)', border: `1px solid ${q.id === 'none' ? 'var(--line)' : q.color}`,
+                  borderRadius: 10, padding: 12, marginBottom: 18,
+                }}>
+                  <div className="row between gap-2" style={{ marginBottom: 10 }}>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: q.color }}>{q.label}</span>
+                    <span className="mono" style={{ fontWeight: 600 }}>{ils(job.price || itemsTotal)}</span>
+                  </div>
+                  <div className="row gap-2 wrap">
+                    {job.quoteStatus !== 'sent' && job.quoteStatus !== 'approved' && (
+                      <button className="btn btn-sm btn-solid" onClick={() => onQuote(job.id, 'sent')}>סמן: ההצעה נשלחה</button>
+                    )}
+                    {job.quoteStatus === 'sent' && (
+                      <>
+                        <button className="btn btn-sm btn-solid" onClick={() => onQuote(job.id, 'approved')}>הלקוח אישר ✓</button>
+                        <button className="btn btn-sm" style={{ color: '#E5735B' }} onClick={() => onQuote(job.id, 'rejected')}>נדחתה</button>
+                      </>
+                    )}
+                    {job.quoteStatus === 'approved' && (
+                      <button className="btn btn-sm" onClick={() => onQuote(job.id, 'sent')}>בטל אישור</button>
+                    )}
+                    {wa && (
+                      <a className="btn btn-sm" href={wa} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: '#55C07E' }}>
+                        שלח בוואטסאפ
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </>
+            )
+          })()}
 
           {/* משמרות */}
           <div className="row between" style={{ marginBottom: 8 }}>

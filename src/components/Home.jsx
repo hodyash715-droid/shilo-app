@@ -1,5 +1,5 @@
 import React from 'react'
-import { daysUntil, relLabel, shiftKindLabel } from '../data.js'
+import { daysUntil, relLabel, shiftKindLabel, fmtDate, quoteApproved, quoteOf } from '../data.js'
 import { EmpAvatar } from './ui.jsx'
 import Board from './Board.jsx'
 
@@ -18,12 +18,74 @@ const needsTeam = j => j.team.length === 0 && !['inquiry', 'installed'].includes
 // מה כל עבודה צריכה — לפי עדיפות
 function needOf(j) {
   if (isOverdue(j)) return { kind: 'overdue', reason: `באיחור · ${relLabel(j.eventDate)}`, action: 'עדכן', hot: true }
+  if (j.quoteStatus === 'needs_quote') return { kind: 'quote', reason: 'יש לשלוח הצעת מחיר', action: 'הצעה', hot: true }
+  if (j.quoteStatus === 'sent') return { kind: 'waiting', reason: 'ממתין לאישור הלקוח', action: 'פתח' }
   if (j.status === 'approval') return { kind: 'approval', reason: 'ממתין לאישור', action: 'אשר', hot: true }
   if (needsTeam(j)) return { kind: 'team', reason: 'חסר צוות', action: 'שבץ' }
   if (j.status === 'inquiry') return { kind: 'inquiry', reason: 'פנייה חדשה — לתמחר', action: 'הצעה' }
   return null
 }
-const RANK = { overdue: 0, approval: 1, team: 2, inquiry: 3 }
+const RANK = { overdue: 0, quote: 1, waiting: 2, approval: 3, team: 4, inquiry: 5 }
+
+// עבודה שצריך לשבץ לה צוות: פעילה, ויש משמרת לא מאוישת (או שאין משמרות בכלל)
+function needsStaffing(j, shifts) {
+  if (j.status === 'installed') return false
+  const own = shifts.filter(s => s.job_id === j.id)
+  if (own.length === 0) return true
+  return own.some(s => (s.assigned?.length || 0) < (s.need || 1))
+}
+
+function StaffingLists({ jobs, shifts, onOpen }) {
+  const toStaff = jobs.filter(j => needsStaffing(j, shifts))
+  if (toStaff.length === 0) return null
+  const ok = toStaff.filter(quoteApproved)
+  const risky = toStaff.filter(j => !quoteApproved(j))
+
+  const List = ({ items, hot, title }) => (
+    <div className="grow" style={{ minWidth: 250 }}>
+      <div className="row gap-2" style={{ marginBottom: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 999, background: hot ? '#A8382A' : '#3E9C68' }} />
+        <span style={{ fontWeight: 700, fontSize: 14, color: hot ? '#E5735B' : 'var(--go-fg)' }}>{title}</span>
+        <span className="t-meta">{items.length}</span>
+      </div>
+      {items.length === 0
+        ? <div className="muted" style={{ fontSize: 13, padding: '6px 2px' }}>אין</div>
+        : <div className="card" style={{ overflow: 'hidden' }}>
+            {items.map((j, i) => (
+              <button key={j.id} onClick={() => onOpen(j)} style={{
+                appearance: 'none', border: 0, width: '100%', textAlign: 'start', cursor: 'pointer',
+                background: 'transparent', color: 'var(--ink)', font: 'inherit',
+                padding: 11, display: 'flex', alignItems: 'center', gap: 10,
+                borderTop: i ? '1px solid var(--hair)' : 0,
+                borderInlineStart: `3px solid ${hot ? '#A8382A' : '#3E9C68'}`,
+              }}>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }} className="truncate">{j.title || j.client}</div>
+                  <div className="t-meta truncate">
+                    {j.eventDate ? fmtDate(j.eventDate) : 'ללא תאריך'}
+                    {hot && <span style={{ color: '#E5735B', fontWeight: 600 }}> · {quoteOf(j).short}</span>}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>}
+    </div>
+  )
+
+  return (
+    <div style={{ marginBottom: 26 }}>
+      <div className="row gap-2" style={{ marginBottom: 10 }}>
+        <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />
+        <span style={{ fontWeight: 700, fontSize: 16 }}>לשיבוץ צוות</span>
+        <span className="t-meta">{toStaff.length}</span>
+      </div>
+      <div className="row wrap gap-4" style={{ alignItems: 'flex-start' }}>
+        <List items={ok} title="הצעה אושרה" />
+        <List items={risky} title="טרם אושרה הצעה" hot />
+      </div>
+    </div>
+  )
+}
 
 function Hero({ name, jobs }) {
   const overdue = jobs.filter(isOverdue).length
@@ -122,6 +184,7 @@ export default function Home({ jobs, name, onOpen, onStatus, onEdit, shifts, emp
 
   const act = (job, need) => {
     if (need.kind === 'approval') onStatus(job.id, 'production')
+    else if (need.kind === 'quote' || need.kind === 'waiting') onOpen(job)  // מסך ההצעה
     else onEdit(job)              // overdue / team / inquiry → פתיחה לעריכה
   }
 
@@ -151,6 +214,8 @@ export default function Home({ jobs, name, onOpen, onStatus, onEdit, shifts, emp
           ))}
         </div>
       )}
+
+      <StaffingLists jobs={jobs} shifts={shifts || []} onOpen={onOpen} />
 
       <Today shifts={shifts} jobs={jobs} employees={employees} onOpen={onOpen} />
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { STATUSES, statusIndex, fmtDate, relLabel, daysUntil, isUrgent, ils } from '../data.js'
+import { STATUSES, statusIndex, fmtDate, relLabel, daysUntil, isUrgent, ils, quoteOpen, quoteOf } from '../data.js'
 import { StatusPill, Thumb, catLabel } from './ui.jsx'
 
 function Avatar({ name }) {
@@ -30,6 +30,12 @@ function JobCard({ job, onOpen, onStatus }) {
         flexDirection: 'column', gap: 10,
         border: (urgent || overdue) ? '1px solid var(--gold)' : undefined,
       }}>
+      {quoteOpen(job) && (
+        <div className="chip" style={{ background: 'rgba(168,56,42,.18)', color: '#E5735B', alignSelf: 'flex-start' }}>
+          <span className="chip-dot" />{quoteOf(job).label}
+        </div>
+      )}
+
       <div className="row between gap-2">
         <StatusPill id={job.status} />
         <span className={(urgent || overdue) ? 'chip chip-signal' : 't-meta'} style={{ alignSelf: 'center' }}>

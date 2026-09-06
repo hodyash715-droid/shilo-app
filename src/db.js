@@ -12,6 +12,7 @@ const fromRow = r => ({
   items: Array.isArray(r.items) ? r.items : [],
   team: Array.isArray(r.team) ? r.team : [],
   note: r.note || '',
+  quoteStatus: r.quote_status || 'none',
 })
 
 const toRow = j => ({
@@ -49,7 +50,8 @@ export async function updateJob(id, patch) {
   // patch בצורת האפליקציה; ממירים רק את השדות שקיימים
   const row = {}
   const map = { title:'title', client:'client', contact:'contact', eventDate:'event_date',
-    status:'status', price:'price', items:'items', team:'team', note:'note' }
+    status:'status', price:'price', items:'items', team:'team', note:'note',
+    quoteStatus:'quote_status', quoteSentAt:'quote_sent_at', quoteDecidedAt:'quote_decided_at' }
   for (const k in patch) if (map[k] !== undefined) row[map[k]] = patch[k]
   const { data, error } = await supabase
     .from('jobs')
