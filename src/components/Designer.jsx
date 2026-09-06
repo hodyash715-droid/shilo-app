@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { DIMS, render, hitTest, lenOf } from '../designer/geometry.js'
+import { DIMS, render, hitTest, lenOf, worldPerPixel, dragAxes, snapAlong } from '../designer/geometry.js'
 import { cutList, optimize, DEFAULT_STOCK } from '../designer/cuts.js'
 import { materialsFor } from '../designer/materials.js'
 import DrawingSheet from './DrawingSheet.jsx'
@@ -27,50 +27,125 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
   const [panel, setPanel] = useState(null)   // null | 'add' | 'cuts' | 'load'
   const [stockOv, setStockOv] = useState({})
   const [sheet, setSheet] = useState(false)
+  const [guides, setGuides] = useState([])
+  const [snapOn, setSnapOn] = useState(true)
+  const histRef = useRef({ past: [], future: [] })
+  const [histLen, setHistLen] = useState(0)
 
   const materials = React.useMemo(() => materialsFor(inventory), [inventory])
   const selPart = parts.find(p => p.id === sel) || null
 
   // ציור מחדש בכל שינוי
   useEffect(() => {
-    hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: sel })
-  }, [parts, dims, materials, view, sel])
+    hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: sel, guides })
+  }, [parts, dims, materials, view, sel, guides])
 
   useEffect(() => {
-    const on = () => { hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: sel }) }
+    const on = () => { hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: sel, guides }) }
     window.addEventListener('resize', on)
     return () => window.removeEventListener('resize', on)
   })
 
+  // מצב עדכני של החלקים גם בין רינדורים — גרירה חייבת בסיס טרי
+  const partsRef = useRef(parts)
+  partsRef.current = parts
+
+  // ---- היסטוריה: בטל ----
+  const snapshot = () => {
+    const h = histRef.current
+    h.past.push(JSON.stringify(partsRef.current))
+    if (h.past.length > 40) h.past.shift()
+    setHistLen(h.past.length)
+  }
+  const undo = () => {
+    const h = histRef.current
+    if (!h.past.length) return
+    const prev = JSON.parse(h.past.pop())
+    partsRef.current = prev
+    setParts(prev); setSel(null); setGuides([]); setHistLen(h.past.length)
+  }
+
   // ---- אינטראקציה: גרירת חלק / סיבוב תצוגה / זום ----
-  const pos = e => {
+  const pt = e => { const t = e.touches?.[0] || e; return { cx: t.clientX, cy: t.clientY } }
+  const canvasXY = e => {
     const r = cvRef.current.getBoundingClientRect()
     const t = e.touches?.[0] || e
-    const dpr = cvRef.current.width / r.width
-    return { x: (t.clientX - r.left) * dpr, y: (t.clientY - r.top) * dpr, cx: t.clientX, cy: t.clientY }
+    const k = cvRef.current.width / r.width
+    return { x: (t.clientX - r.left) * k, y: (t.clientY - r.top) * k }
   }
+  const twoDist = e => {
+    const [a, b] = e.touches
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+  }
+  // ס"מ בעולם לכל פיקסל CSS
+  const worldPerCss = () => {
+    const cv = cvRef.current
+    const k = cv.width / cv.getBoundingClientRect().width
+    return worldPerPixel(view, cv.width, cv.height) * k
+  }
+
   const down = e => {
-    const p = pos(e)
-    const id = hitTest(hitsRef.current, p.x, p.y)
+    if (e.touches?.length === 2) {
+      dragRef.current = { mode: 'pinch', d0: twoDist(e), dist0: view.dist }
+      return
+    }
+    const c = canvasXY(e), q = pt(e)
+    const id = hitTest(hitsRef.current, c.x, c.y)
     setSel(id)
-    dragRef.current = { mode: id ? 'part' : 'orbit', id, lx: p.cx, ly: p.cy }
+    if (id) snapshot()
+    dragRef.current = { mode: id ? 'part' : 'orbit', id, lx: q.cx, ly: q.cy }
   }
+
   const move = e => {
     const d = dragRef.current; if (!d) return
-    const p = pos(e)
-    const dx = p.cx - d.lx, dy = p.cy - d.ly
-    d.lx = p.cx; d.ly = p.cy
+    e.preventDefault?.()
+
+    if (d.mode === 'pinch') {
+      if (e.touches?.length !== 2) return
+      const k = twoDist(e) / (d.d0 || 1)
+      setView(v => ({ ...v, dist: Math.max(60, Math.min(900, d.dist0 / k)) }))
+      return
+    }
+
+    const q = pt(e)
+    const dx = q.cx - d.lx, dy = q.cy - d.ly
+    d.lx = q.cx; d.ly = q.cy
+
     if (d.mode === 'orbit') {
       setView(v => ({ ...v, yaw: v.yaw - dx * 0.01, pitch: Math.max(-1.2, Math.min(1.4, v.pitch + dy * 0.01)) }))
-    } else if (d.id) {
-      const k = 0.35
-      setParts(ps => ps.map(x => x.id === d.id
-        ? { ...x, pos: { ...x.pos, x: x.pos.x + dx * k, y: x.pos.y - dy * k } } : x))
+      return
     }
-    e.preventDefault?.()
+    if (!d.id) return
+
+    const w = worldPerCss()
+    const { h, hs } = dragAxes(view)
+    const cp = Math.max(0.25, Math.cos(view.pitch))
+    let next = partsRef.current.map(x => x.id !== d.id ? x : {
+      ...x,
+      pos: {
+        ...x.pos,
+        [h]: (x.pos[h] || 0) + dx * w * hs,
+        y: (x.pos.y || 0) - dy * w / cp,
+      },
+    })
+
+    let g = []
+    if (snapOn) {
+      const me = next.find(x => x.id === d.id)
+      const snapped = { ...me, pos: { ...me.pos } }
+      const tol = Math.max(1, 14 * w)
+      ;[h, 'y'].forEach(ax => {
+        const r = snapAlong(ax, snapped, dims, materials, next, tol)
+        if (r) { snapped.pos[ax] = r.center; g.push({ axis: ax, value: r.guide }) }
+      })
+      next = next.map(x => x.id === d.id ? snapped : x)
+    }
+    partsRef.current = next
+    setParts(next); setGuides(g)
   }
-  const up = () => { dragRef.current = null }
-  const wheel = e => { e.preventDefault(); setView(v => ({ ...v, dist: Math.max(80, Math.min(900, v.dist + e.deltaY * 0.5)) })) }
+
+  const up = () => { dragRef.current = null; setGuides([]) }
+  const wheel = e => { e.preventDefault(); setView(v => ({ ...v, dist: Math.max(60, Math.min(900, v.dist + e.deltaY * 0.5)) })) }
 
   // ---- חלקים ----
   const addPart = (invId) => {
@@ -81,17 +156,28 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
       len: SMART[axis], axis,
       pos: { x: (parts.length % 6) * 14 - 35, y: dims.גובה / 2, z: 0 },
     }
+    snapshot()
     setParts(ps => [...ps, p]); setSel(p.id); setPanel(null)
   }
-  const setField = (f, v) => setParts(ps => ps.map(p => p.id === sel ? { ...p, [f]: v } : p))
-  const nudge = (axis, step) => setParts(ps => ps.map(p => p.id === sel
-    ? { ...p, pos: { ...p.pos, [axis]: (p.pos[axis] || 0) + step } } : p))
+  const setField = (f, v) => {
+    snapshot()
+    setParts(ps => ps.map(p => p.id === sel ? { ...p, [f]: v } : p))
+  }
+  const nudge = (axis, step) => {
+    snapshot()
+    setParts(ps => ps.map(p => p.id === sel
+      ? { ...p, pos: { ...p.pos, [axis]: Math.round(((p.pos[axis] || 0) + step) * 10) / 10 } } : p))
+  }
   const dupPart = () => {
     if (!selPart) return
+    snapshot()
     const c = { ...selPart, id: uid(), pos: { ...selPart.pos, x: selPart.pos.x + 12 } }
     setParts(ps => [...ps, c]); setSel(c.id)
   }
-  const delPart = () => { setParts(ps => ps.filter(p => p.id !== sel)); setSel(null) }
+  const delPart = () => {
+    snapshot()
+    setParts(ps => ps.filter(p => p.id !== sel)); setSel(null)
+  }
 
   const resetView = () => setView({ yaw: -0.7, pitch: 0.45, dist: 340, target: { x: 0, y: dims.גובה / 2, z: 0 } })
 
@@ -156,13 +242,22 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
               <div style={{ fontSize: 34, marginBottom: 6 }}>🪚</div>
               <div style={{ fontWeight: 700 }}>המשטח ריק</div>
               <div className="muted" style={{ fontSize: 13, marginTop: 4, lineHeight: 1.7 }}>
-                לחץ <b>＋ חלק</b> כדי להתחיל.<br />גרור חלק להזזה · גרור רקע לסיבוב · גלגלת לזום.
+                לחץ <b>＋ חלק</b> כדי להתחיל.<br />גרור חלק להזזה · גרור רקע לסיבוב · שתי אצבעות לזום.
               </div>
             </div>
           </div>
         )}
-        <button className="btn btn-sm" onClick={resetView}
-          style={{ position: 'absolute', top: 10, insetInlineStart: 10 }}>🔄 מבט</button>
+        <div className="row gap-2" style={{ position: 'absolute', top: 10, insetInlineStart: 10 }}>
+          <button className="btn btn-sm" onClick={resetView}>🔄 מבט</button>
+          <button className="btn btn-sm" onClick={undo} disabled={!histLen}
+            style={{ opacity: histLen ? 1 : .4 }}>↶ בטל</button>
+          <button className="btn btn-sm" onClick={() => setSnapOn(v => !v)} title="הצמדה לחלקים אחרים"
+            style={{
+              background: snapOn ? 'var(--go-bg)' : 'var(--card)',
+              color: snapOn ? 'var(--go-fg)' : 'var(--ink45)',
+              borderColor: snapOn ? 'var(--go)' : 'var(--line)',
+            }}>🧲 הצמדה</button>
+        </div>
       </div>
 
       {/* סרגל כלים */}
@@ -174,6 +269,22 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
         {tbtn('💾 שמור', save)}
         {parts.length > 0 && tbtn('חדש', newK)}
       </div>
+
+      {/* רצועת החלקים — בחירה מהירה בלי לצוד על המשטח */}
+      {parts.length > 0 && (
+        <div className="row gap-2 wrap" style={{ marginTop: 10 }}>
+          {parts.map((p, i) => (
+            <button key={p.id} className="chip" onClick={() => setSel(p.id)} style={{
+              cursor: 'pointer', border: '1px solid',
+              borderColor: p.id === sel ? 'var(--gold)' : 'var(--line)',
+              background: p.id === sel ? 'var(--gold-bg)' : 'var(--card)',
+              color: p.id === sel ? 'var(--gold-fg)' : 'var(--ink70)',
+            }}>
+              <span className="mono">{i + 1}</span> · {p.name} · <span className="mono">{Math.round(lenOf(p, dims))}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* בחירת חומר להוספה */}
       {panel === 'add' && (

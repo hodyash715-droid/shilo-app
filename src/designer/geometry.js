@@ -117,7 +117,7 @@ function drawGrid(ctx, view, W, H, dpr) {
 }
 
 // ---- ציור מלא. מחזיר את הפאות למטרת hit-test ----
-export function render(canvas, { parts, dims, materials, view, selId }) {
+export function render(canvas, { parts, dims, materials, view, selId, guides }) {
   if (!canvas) return []
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
   const r = canvas.getBoundingClientRect()
@@ -154,6 +154,25 @@ export function render(canvas, { parts, dims, materials, view, selId }) {
     hit.push({ pts: fc.pts, depth: fc.depth, partId: fc.part.id })
   })
 
+  // קווי הצמדה — נמתחים לרוחב הסצנה בציר שנצמד
+  if (guides && guides.length) {
+    ctx.save()
+    ctx.setLineDash([7 * dpr, 5 * dpr])
+    ctx.strokeStyle = '#55C07E'
+    ctx.lineWidth = 1.5 * dpr
+    const R = Math.max(dims.רוחב, dims.גובה, dims.עומק, 60) * 1.1
+    guides.forEach(g => {
+      const a = { x: 0, y: dims.גובה / 2, z: 0 }, b = { x: 0, y: dims.גובה / 2, z: 0 }
+      const along = g.axis === 'y' ? 'x' : 'y'   // הקו נמתח בציר אחר
+      a[g.axis] = b[g.axis] = g.value
+      a[along] = g.axis === 'y' ? -R : 0
+      b[along] = g.axis === 'y' ? R : dims.גובה
+      const pa = project(a, view, W, H), pb = project(b, view, W, H)
+      ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke()
+    })
+    ctx.restore()
+  }
+
   if (selId) {
     const p = parts.find(x => x.id === selId)
     if (p) {
@@ -174,4 +193,66 @@ export function hitTest(hits, x, y) {
   if (!found.length) return null
   found.sort((a, b) => a.depth - b.depth)
   return found[0].partId
+}
+
+// ============================================================
+// עזרי עריכה: גרירה מדויקת והצמדות
+// ============================================================
+
+// כמה ס"מ בעולם שווה פיקסל אחד על המסך (במישור המטרה)
+export function worldPerPixel(view, W, H) {
+  const f = Math.min(W, H) * 0.9
+  return view.dist / f
+}
+
+// לאיזה ציר בעולם מתאימה תנועה אופקית של העכבר, לפי סיבוב התצוגה
+export function dragAxes(view) {
+  const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw)
+  return Math.abs(cy) >= Math.abs(sy)
+    ? { h: 'x', hs: Math.sign(cy) || 1 }
+    : { h: 'z', hs: -(Math.sign(sy) || 1) }
+}
+
+// תיבת החלק בעולם (ס"מ) — לצורך הצמדות
+export function aabb(part, dims, materials) {
+  const [pw, ph] = displayProfile(part, dims, materials)
+  const L = lenOf(part, dims)
+  let hx, hy, hz
+  if (part.axis === 'x') { hx = L / 2; hy = ph / 2; hz = pw / 2 }
+  else if (part.axis === 'y') { hx = pw / 2; hy = L / 2; hz = ph / 2 }
+  else { hx = pw / 2; hy = ph / 2; hz = L / 2 }
+  const c = part.pos
+  return {
+    x: [c.x - hx, c.x, c.x + hx],
+    y: [c.y - hy, c.y, c.y + hy],
+    z: [c.z - hz, c.z, c.z + hz],
+  }
+}
+
+// מועמדים להצמדה לאורך ציר: קצוות ומרכזים של שאר החלקים + גבולות הקוליסה
+export function snapTargets(axis, parts, movingId, dims, materials) {
+  const t = []
+  parts.forEach(p => {
+    if (p.id === movingId) return
+    aabb(p, dims, materials)[axis].forEach(v => t.push(v))
+  })
+  if (axis === 'y') { t.push(0, dims.גובה, dims.גובה / 2) }
+  if (axis === 'x') { t.push(0, -dims.רוחב / 2, dims.רוחב / 2) }
+  if (axis === 'z') { t.push(0, -dims.עומק / 2, dims.עומק / 2) }
+  return t
+}
+
+// מצמיד חלק לאורך ציר. מחזיר את המרכז החדש ואת קו העזר להצגה.
+export function snapAlong(axis, part, dims, materials, parts, tol) {
+  const box = aabb(part, dims, materials)[axis]      // [min, center, max]
+  const targets = snapTargets(axis, parts, part.id, dims, materials)
+  let best = null
+  box.forEach((edge, i) => {
+    targets.forEach(t => {
+      const d = Math.abs(edge - t)
+      if (d <= tol && (!best || d < best.d)) best = { d, delta: t - edge, guide: t }
+    })
+  })
+  if (!best) return null
+  return { center: part.pos[axis] + best.delta, guide: best.guide }
 }
