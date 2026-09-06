@@ -176,14 +176,24 @@ export async function fetchInventory() {
   return data
 }
 
+// אם koolisot.sql עדיין לא הורץ אין עמודת stock_len — לא מפילים את השמירה בגללה
+const withoutStockLen = o => { const { stock_len, ...rest } = o; return rest }
+const missingStockLen = e => /stock_len/.test(e?.message || '')
+
 export async function createInvItem(it) {
-  const { data, error } = await supabase.from('inventory').insert(it).select().single()
+  let { data, error } = await supabase.from('inventory').insert(it).select().single()
+  if (error && missingStockLen(error)) {
+    ({ data, error } = await supabase.from('inventory').insert(withoutStockLen(it)).select().single())
+  }
   if (error) throw error
   return data
 }
 
 export async function updateInvItem(id, patch) {
-  const { data, error } = await supabase.from('inventory').update(patch).eq('id', id).select().single()
+  let { data, error } = await supabase.from('inventory').update(patch).eq('id', id).select().single()
+  if (error && missingStockLen(error)) {
+    ({ data, error } = await supabase.from('inventory').update(withoutStockLen(patch)).eq('id', id).select().single())
+  }
   if (error) throw error
   return data
 }
