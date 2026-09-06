@@ -186,6 +186,21 @@ body {
 .muted { color: var(--ink45); }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* --- הדפסה: רק גיליון השרטוט יוצא למדפסת --- */
+@media print {
+  @page { size: A4 landscape; margin: 5mm; }
+  html, body { background: #fff !important; }
+  body * { visibility: hidden !important; box-shadow: none !important; }
+  .no-print { display: none !important; }
+  .print-sheet, .print-sheet * { visibility: visible !important; }
+  .print-sheet {
+    position: fixed !important; inset: 0 !important;
+    width: 100% !important; height: auto !important;
+    background: #fff !important; border-radius: 0 !important;
+  }
+  .print-sheet canvas { width: 100% !important; height: auto !important; }
+}
+
 /* פאנל צד — החלקה פנימה */
 @keyframes jd-in { from { transform: translateX(-8%); opacity: .4; } to { transform: none; opacity: 1; } }
 .jd-panel { animation: jd-in .16s ease-out; }

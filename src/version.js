@@ -1,3 +1,3 @@
 // סימן גרסה למעקב — מעדכנים בכל פריסה משמעותית.
 // 0.1 = שלב א׳ (דמו) · 0.2 = שחור-זהב · 0.3 = Supabase
-export const VERSION = 'v0.9.0'
+export const VERSION = 'v0.9.1'

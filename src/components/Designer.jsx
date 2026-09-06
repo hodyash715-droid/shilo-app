@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { DIMS, render, hitTest, lenOf } from '../designer/geometry.js'
 import { cutList, optimize, DEFAULT_STOCK } from '../designer/cuts.js'
 import { materialsFor } from '../designer/materials.js'
+import DrawingSheet from './DrawingSheet.jsx'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const AXES = [
@@ -23,8 +24,9 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
   const [parts, setParts] = useState([])
   const [sel, setSel] = useState(null)
   const [view, setView] = useState({ yaw: -0.7, pitch: 0.45, dist: 340, target: { x: 0, y: 90, z: 0 } })
-  const [panel, setPanel] = useState(null)   // null | 'cuts' | 'load'
+  const [panel, setPanel] = useState(null)   // null | 'add' | 'cuts' | 'load'
   const [stockOv, setStockOv] = useState({})
+  const [sheet, setSheet] = useState(false)
 
   const materials = React.useMemo(() => materialsFor(inventory), [inventory])
   const selPart = parts.find(p => p.id === sel) || null
@@ -167,6 +169,7 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
       <div className="row gap-2 wrap" style={{ marginTop: 12 }}>
         {tbtn('＋ חלק', () => setPanel('add'), true)}
         {tbtn('✂️ חיתוך', () => setPanel(panel === 'cuts' ? null : 'cuts'))}
+        {parts.length > 0 && tbtn('📐 שרטוט', () => setSheet(true))}
         {tbtn('📂 קוליסות', () => setPanel(panel === 'load' ? null : 'load'))}
         {tbtn('💾 שמור', save)}
         {parts.length > 0 && tbtn('חדש', newK)}
@@ -333,6 +336,11 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
             הפס הכהה בסוף כל קורה הוא הפחת. חישוב כולל 3 מ״מ לרוחב המסור בין חיתוכים.
           </div>
         </div>
+      )}
+
+      {sheet && (
+        <DrawingSheet name={name} dims={dims} parts={parts} materials={materials}
+          stockOv={stockOv} onClose={() => setSheet(false)} />
       )}
     </div>
   )
