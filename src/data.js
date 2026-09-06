@@ -22,6 +22,15 @@ export const SHIFT_KINDS = [
 ]
 export const shiftKindLabel = k => (SHIFT_KINDS.find(s => s.id === k) || {}).label || 'משמרת'
 
+// מצבי זמינות של עובד ליום
+export const AVAIL = [
+  { id: 'full',    label: 'פנוי כל היום', color: '#3E9C68' },
+  { id: 'morning', label: 'בוקר בלבד',    color: '#EEC421' },
+  { id: 'evening', label: 'ערב ולילה',    color: '#C97A2B' },
+  { id: 'off',     label: 'לא פנוי',      color: '#A8382A' },
+]
+export const availById = Object.fromEntries(AVAIL.map(a => [a.id, a]))
+
 // קטגוריות פריטים
 export const CATEGORIES = {
   backdrop: 'קוליסה',
@@ -36,6 +45,8 @@ const _now = new Date()
 export const TODAY = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate())
 
 // ---- עזרי תאריך ----
+const _pad = n => String(n).padStart(2, '0')
+export const isoLocal = d => `${d.getFullYear()}-${_pad(d.getMonth() + 1)}-${_pad(d.getDate())}`
 export const parseDate = s => { const [y, m, dd] = String(s).split('-').map(Number); return new Date(y, m - 1, dd) }
 export const daysUntil = s => Math.round((parseDate(s) - TODAY) / 86400000)
 

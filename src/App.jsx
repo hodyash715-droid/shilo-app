@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase, isConfigured } from './supabase.js'
-import { fetchJobs, updateJob, fetchEmployees, fetchShifts, fetchInventory } from './db.js'
+import {
+  fetchJobs, updateJob, fetchEmployees, fetchShifts, fetchInventory,
+  fetchAvailability, setAvailability as saveAvailability, clearAvailability,
+} from './db.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
 import Calendar from './components/Calendar.jsx'
@@ -71,6 +74,7 @@ export default function App() {
   const [employees, setEmployees] = useState([])
   const [shifts, setShifts] = useState([])
   const [inventory, setInventory] = useState([])
+  const [availability, setAvailabilityState] = useState([])
   const [loading, setLoading] = useState(false)
   const [loadErr, setLoadErr] = useState('')
   const [view, setView] = useState('home')
@@ -96,13 +100,14 @@ export default function App() {
   const load = async () => {
     setLoading(true); setLoadErr('')
     try {
-      const [j, e, sh, inv] = await Promise.all([
+      const [j, e, sh, inv, av] = await Promise.all([
         fetchJobs(),
         fetchEmployees().catch(() => []),
         fetchShifts().catch(() => []),
         fetchInventory().catch(() => []),
+        fetchAvailability().catch(() => []),
       ])
-      setJobs(j); setEmployees(e); setShifts(sh); setInventory(inv)
+      setJobs(j); setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av)
     }
     catch (e) { setLoadErr(e.message || String(e)) }
     finally { setLoading(false) }
@@ -164,6 +169,22 @@ export default function App() {
   }
   const onInvDeleted = (id) => { setInventory(xs => xs.filter(x => x.id !== id)); showToast('הפריט נמחק') }
 
+  // זמינות עובד ליום
+  const onSetAvail = async (employee_id, date, status) => {
+    const match = a => a.employee_id === employee_id && a.date === date
+    if (!status) {
+      setAvailabilityState(av => av.filter(a => !match(a)))
+      try { await clearAvailability(employee_id, date) }
+      catch (e) { showToast('עדכון נכשל'); load() }
+      return
+    }
+    setAvailabilityState(av => av.some(match)
+      ? av.map(a => match(a) ? { ...a, status } : a)
+      : [...av, { employee_id, date, status }])
+    try { await saveAvailability(employee_id, date, status) }
+    catch (e) { showToast('עדכון נכשל'); load() }
+  }
+
   if (!authReady) return <div style={{ minHeight: '100%' }} />
   if (!isConfigured) return <><Setup /><VersionBadge /></>
   if (!session) return <><Login /><VersionBadge /></>
@@ -197,7 +218,9 @@ export default function App() {
                 shifts={shifts} employees={employees} />
             )}
             {view === 'calendar' && <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
-            {view === 'team' && <Team employees={employees} onSaved={onEmpSaved} onDeleted={onEmpDeleted} />}
+            {view === 'team' && <Team employees={employees} shifts={shifts} jobs={jobs}
+              availability={availability} onSetAvail={onSetAvail}
+              onShiftSaved={onShiftSaved} onShiftDeleted={onShiftDeleted} />}
             {view === 'field' && <Field jobs={jobs} shifts={shifts} inventory={inventory}
               onItemReturn={(jobId, i) => markReturned(jobId, i)}
               onAllReturned={(jobId) => markReturned(jobId, 'all')}

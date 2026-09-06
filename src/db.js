@@ -146,3 +146,25 @@ export async function deleteInvItem(id) {
   const { error } = await supabase.from('inventory').delete().eq('id', id)
   if (error) throw error
 }
+
+// ---------- זמינות ----------
+export async function fetchAvailability() {
+  const { data, error } = await supabase.from('availability').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function setAvailability(employee_id, date, status) {
+  const { data, error } = await supabase
+    .from('availability')
+    .upsert({ employee_id, date, status }, { onConflict: 'employee_id,date' })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function clearAvailability(employee_id, date) {
+  const { error } = await supabase.from('availability').delete()
+    .eq('employee_id', employee_id).eq('date', date)
+  if (error) throw error
+}
