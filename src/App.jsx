@@ -101,6 +101,7 @@ export default function App() {
   const [availability, setAvailabilityState] = useState([])
   const [clients, setClients] = useState([])
   const [koolisot, setKoolisot] = useState([])
+  const [designTarget, setDesignTarget] = useState(null)  // {jobId, koolisaId}
   const [loading, setLoading] = useState(false)
   const [dataReady, setDataReady] = useState(false)
   const [loadErr, setLoadErr] = useState('')
@@ -340,7 +341,8 @@ export default function App() {
               onAllReturned={(jobId) => markReturned(jobId, 'all')}
               onInvSaved={onInvSaved} onInvDeleted={onInvDeleted} />}
             {view === 'design' && <Designer inventory={inventory} koolisot={koolisot}
-              onSave={onKoolisaSave} onDelete={onKoolisaDelete} />}
+              jobs={jobs} onSave={onKoolisaSave} onDelete={onKoolisaDelete}
+              target={designTarget} onTargetUsed={() => setDesignTarget(null)} />}
             {view === 'settings' && <Settings name={displayName(session.user?.email)}
               email={session.user?.email} onSignOut={() => supabase.auth.signOut()}
               employees={employees} onEmpSaved={onEmpSaved} onEmpDeleted={onEmpDeleted}
@@ -356,6 +358,12 @@ export default function App() {
           shifts={shifts} employees={employees}
           onShiftSaved={onShiftSaved} onShiftDeleted={onShiftDeleted}
           onQuote={onQuote}
+          koolisot={koolisot}
+          onDesign={(jobId, koolisaId) => {
+            setDesignTarget({ jobId, koolisaId })
+            setOpenId(null)
+            setView('design')
+          }}
         />
       )}
 

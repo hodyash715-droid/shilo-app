@@ -3,7 +3,7 @@ import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel
 import { Thumb, catLabel, EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
 
-export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, onShiftSaved, onShiftDeleted, onQuote }) {
+export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, onShiftSaved, onShiftDeleted, onQuote, koolisot = [], onDesign }) {
   const [shiftEdit, setShiftEdit] = useState(undefined) // undefined=closed, null=new, shift=edit
   if (!job) return null
   const curIdx = statusIndex(job.status)
@@ -11,6 +11,7 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
   const next = STATUSES[curIdx + 1]
   const itemsTotal = job.items.reduce((s, it) => s + it.price, 0)
   const jobShifts = (shifts || []).filter(s => s.job_id === job.id)
+  const jobKool = (koolisot || []).filter(k => k.job_id === job.id)
     .sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.start_time || '').localeCompare(b.start_time || ''))
 
   return (
@@ -126,6 +127,39 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
                 )
               })}
             </div>
+          )}
+
+          {/* קוליסות מתוכננות */}
+          {onDesign && (
+            <>
+              <div className="row between" style={{ margin: '18px 0 8px' }}>
+                <div className="t-meta">תכנון קוליסות</div>
+                <button className="btn btn-sm" onClick={() => onDesign(job.id, null)}>＋ קוליסה</button>
+              </div>
+              {jobKool.length === 0 ? (
+                <div className="muted" style={{ fontSize: 13, marginBottom: 18 }}>
+                  אין עדיין קוליסה מתוכננת לעבודה הזאת.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+                  {jobKool.map(k => (
+                    <button key={k.id} onClick={() => onDesign(job.id, k.id)} className="row between gap-2" style={{
+                      appearance: 'none', cursor: 'pointer', textAlign: 'start', font: 'inherit',
+                      background: 'var(--card-2)', border: '1px solid var(--line)',
+                      borderRadius: 9, padding: '10px 12px', color: 'var(--ink)',
+                    }}>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ fontWeight: 600, fontSize: 14, display: 'block' }} className="truncate">{k.name}</span>
+                        <span className="t-meta">
+                          {(k.parts || []).length} חלקים · <span className="mono">{k.preview?.גובה}×{k.preview?.רוחב}</span>
+                        </span>
+                      </span>
+                      <span className="t-meta">פתח במעצב ←</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* פריטים */}

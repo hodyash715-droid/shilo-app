@@ -13,13 +13,14 @@ const AXES = [
 // נוסחאות מהירות לפי ציר
 const SMART = { x: '{רוחב}', y: '{גובה}', z: '{עומק}' }
 
-export default function Designer({ inventory = [], koolisot = [], onSave, onDelete }) {
+export default function Designer({ inventory = [], koolisot = [], jobs = [], onSave, onDelete, target, onTargetUsed }) {
   const cvRef = useRef(null)
   const hitsRef = useRef([])
   const dragRef = useRef(null)
 
   const [name, setName] = useState('')
   const [editId, setEditId] = useState(null)
+  const [jobId, setJobId] = useState(null)
   const [dims, setDims] = useState({ גובה: 200, רוחב: 100, עומק: 40, עובי: 2 })
   const [parts, setParts] = useState([])
   const [sel, setSel] = useState(null)
@@ -185,16 +186,29 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
   const save = async () => {
     const nm = (name || '').trim() || `קוליסה ${dims.גובה}×${dims.רוחב}`
     setName(nm)
-    const saved = await onSave({ id: editId, name: nm, preview: dims, parts })
+    const saved = await onSave({ id: editId, name: nm, preview: dims, parts, jobId })
     if (saved?.id) setEditId(saved.id)
   }
   const loadK = k => {
-    setEditId(k.id); setName(k.name)
+    setEditId(k.id); setName(k.name); setJobId(k.job_id || null)
     setDims({ ...{ גובה: 200, רוחב: 100, עומק: 40, עובי: 2 }, ...(k.preview || {}) })
     setParts(Array.isArray(k.parts) ? k.parts : [])
     setSel(null); setPanel(null)
   }
-  const newK = () => { setEditId(null); setName(''); setParts([]); setSel(null); setPanel(null) }
+  const newK = (forJob = null) => {
+    setEditId(null); setName(''); setParts([]); setSel(null); setPanel(null)
+    setJobId(forJob)
+    histRef.current = { past: [], future: [] }; setHistLen(0)
+  }
+
+  // פתיחה מתוך כרטיס עבודה
+  useEffect(() => {
+    if (!target) return
+    const k = target.koolisaId && koolisot.find(x => x.id === target.koolisaId)
+    if (k) loadK(k)
+    else newK(target.jobId || null)
+    onTargetUsed?.()
+  }, [target])
 
   const cuts = cutList(parts, dims, materials)
   const plans = optimize(cuts, materials, stockOv)
@@ -210,6 +224,16 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
         <input className="field" value={name} onChange={e => setName(e.target.value)}
           placeholder="שם הקוליסה" style={{ fontWeight: 700, flex: 1, minWidth: 0 }} />
         <span className="t-meta" style={{ flex: '0 0 auto' }}>{parts.length} חלקים</span>
+      </div>
+
+      {/* שיוך לעבודה */}
+      <div className="row gap-2" style={{ marginBottom: 12 }}>
+        <span className="t-meta" style={{ flex: '0 0 auto' }}>עבודה</span>
+        <select className="field" value={jobId || ''} onChange={e => setJobId(e.target.value || null)}
+          style={{ height: 36, flex: 1, minWidth: 0 }}>
+          <option value="">— לא משויכת —</option>
+          {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+        </select>
       </div>
 
       {/* מידות פרמטריות */}
@@ -267,7 +291,7 @@ export default function Designer({ inventory = [], koolisot = [], onSave, onDele
         {parts.length > 0 && tbtn('📐 שרטוט', () => setSheet(true))}
         {tbtn('📂 קוליסות', () => setPanel(panel === 'load' ? null : 'load'))}
         {tbtn('💾 שמור', save)}
-        {parts.length > 0 && tbtn('חדש', newK)}
+        {parts.length > 0 && tbtn('חדש', () => newK(jobId))}
       </div>
 
       {/* רצועת החלקים — בחירה מהירה בלי לצוד על המשטח */}
