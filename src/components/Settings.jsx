@@ -1,8 +1,9 @@
 import React from 'react'
 import { VERSION } from '../version.js'
 import EmployeeList from './EmployeeList.jsx'
+import ClientList from './ClientList.jsx'
 
-export default function Settings({ name, email, onSignOut, employees, onEmpSaved, onEmpDeleted }) {
+export default function Settings({ name, email, onSignOut, employees, onEmpSaved, onEmpDeleted, clients = [], onClientSaved, onClientDeleted }) {
   const Row = ({ label, value }) => (
     <div className="row between" style={{ padding: '13px 14px', borderTop: '1px solid var(--hair)' }}>
       <span className="t-meta">{label}</span>
@@ -34,6 +35,14 @@ export default function Settings({ name, email, onSignOut, employees, onEmpSaved
       </div>
       <div style={{ marginBottom: 20 }}>
         <EmployeeList employees={employees} onSaved={onEmpSaved} onDeleted={onEmpDeleted} />
+      </div>
+
+      <div className="row gap-2" style={{ margin: '4px 0 12px' }}>
+        <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />
+        <span style={{ fontWeight: 700, fontSize: 16 }}>מפיקות ולקוחות</span>
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <ClientList clients={clients} onSaved={onClientSaved} onDeleted={onClientDeleted} />
       </div>
 
       <button className="btn" onClick={onSignOut} style={{ width: '100%', color: '#E5735B', height: 46 }}>

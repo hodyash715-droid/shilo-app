@@ -3,7 +3,7 @@ import { supabase, isConfigured } from './supabase.js'
 import {
   fetchJobs, updateJob, fetchEmployees, fetchShifts, fetchInventory,
   fetchAvailability, setAvailability as saveAvailability, clearAvailability,
-  claimEmployeeCode, fetchMyJobTitles,
+  claimEmployeeCode, fetchMyJobTitles, fetchClients,
 } from './db.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
@@ -16,6 +16,7 @@ import Settings from './components/Settings.jsx'
 import Team from './components/Team.jsx'
 import Field from './components/Field.jsx'
 import WorkerApp from './components/WorkerApp.jsx'
+import ClientPortal from './components/ClientPortal.jsx'
 import { VERSION } from './version.js'
 
 const displayName = (email) => ({ shai: 'שי' })[(email || '').split('@')[0]] || (email || '').split('@')[0] || 'שי'
@@ -96,12 +97,14 @@ export default function App() {
   const [shifts, setShifts] = useState([])
   const [inventory, setInventory] = useState([])
   const [availability, setAvailabilityState] = useState([])
+  const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(false)
   const [dataReady, setDataReady] = useState(false)
   const [loadErr, setLoadErr] = useState('')
   const [view, setView] = useState('home')
   const [openId, setOpenId] = useState(null)
   const [editTarget, setEditTarget] = useState(undefined) // undefined=closed, null=new, job=edit
+  const [route, setRoute] = useState(() => window.location.hash || '')
   const [toast, setToast] = useState(null)
   const toastRef = useRef()
   const showToast = (text) => {
@@ -109,6 +112,13 @@ export default function App() {
     clearTimeout(toastRef.current)
     toastRef.current = setTimeout(() => setToast(null), 2200)
   }
+
+  // ניתוב פשוט לפי כתובת: #/c/<token> = דף הלקוח
+  useEffect(() => {
+    const h = () => setRoute(window.location.hash || '')
+    window.addEventListener('hashchange', h)
+    return () => window.removeEventListener('hashchange', h)
+  }, [])
 
   // מעקב אחר מצב התחברות
   useEffect(() => {
@@ -130,8 +140,9 @@ export default function App() {
         fetchInventory().catch(() => []),
         fetchAvailability().catch(() => []),
       ])
+      const cl = await fetchClients().catch(() => [])
       setJobs(j.length ? j : mj)
-      setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av)
+      setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av); setClients(cl)
     }
     catch (e) { setLoadErr(e.message || String(e)) }
     finally { setLoading(false); setDataReady(true) }
@@ -191,6 +202,13 @@ export default function App() {
   }
   const onShiftDeleted = (id) => { setShifts(ss => ss.filter(x => x.id !== id)); showToast('המשמרת נמחקה') }
 
+  const onClientSaved = (c) => {
+    setClients(xs => (xs.some(x => x.id === c.id) ? xs.map(x => x.id === c.id ? c : x) : [...xs, c])
+      .sort((a, b) => a.name.localeCompare(b.name, 'he')))
+    showToast('המפיקה נוספה')
+  }
+  const onClientDeleted = (id) => { setClients(xs => xs.filter(x => x.id !== id)); showToast('נמחקה') }
+
   // ציר הצעת המחיר
   const onQuote = async (jobId, status) => {
     const patch = { quoteStatus: status }
@@ -234,6 +252,10 @@ export default function App() {
     try { await saveAvailability(employee_id, date, status, start_time, end_time) }
     catch (e) { showToast('עדכון נכשל'); load() }
   }
+
+  // דף הלקוח — ללא התחברות, לפני כל בדיקת הרשאות
+  const clientToken = (route.match(/^#\/c\/(.+)$/) || [])[1]
+  if (clientToken) return <><ClientPortal token={decodeURIComponent(clientToken)} /><VersionBadge /></>
 
   if (!authReady) return <div style={{ minHeight: '100%' }} />
   if (!isConfigured) return <><Setup /><VersionBadge /></>
@@ -295,7 +317,8 @@ export default function App() {
               onInvSaved={onInvSaved} onInvDeleted={onInvDeleted} />}
             {view === 'settings' && <Settings name={displayName(session.user?.email)}
               email={session.user?.email} onSignOut={() => supabase.auth.signOut()}
-              employees={employees} onEmpSaved={onEmpSaved} onEmpDeleted={onEmpDeleted} />}
+              employees={employees} onEmpSaved={onEmpSaved} onEmpDeleted={onEmpDeleted}
+              clients={clients} onClientSaved={onClientSaved} onClientDeleted={onClientDeleted} />}
           </div>}
 
       {openJob && (

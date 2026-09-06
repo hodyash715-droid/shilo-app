@@ -193,6 +193,53 @@ export async function deleteInvItem(id) {
   if (error) throw error
 }
 
+// ---------- לקוחות / מפיקות (צד המנהל) ----------
+export async function fetchClients() {
+  const { data, error } = await supabase.from('clients').select('*').order('name')
+  if (error) throw error
+  return data
+}
+export async function createClientRec(c) {
+  const { data, error } = await supabase.from('clients').insert(c).select().single()
+  if (error) throw error
+  return data
+}
+export async function updateClientRec(id, patch) {
+  const { data, error } = await supabase.from('clients').update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+export async function deleteClientRec(id) {
+  const { error } = await supabase.from('clients').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ---------- דף הלקוח (ללא התחברות, דרך טוקן) ----------
+export async function clientPortal(token) {
+  const { data, error } = await supabase.rpc('client_portal', { p_token: token })
+  if (error) throw error
+  return data // null = קישור לא תקין
+}
+export async function clientSubmitOrder(token, o) {
+  const { data, error } = await supabase.rpc('client_submit_order', {
+    p_token: token,
+    p_title: o.title || '',
+    p_event_date: o.eventDate || null,
+    p_venue: o.venue || null,
+    p_note: o.note || null,
+    p_items: o.items || [],
+  })
+  if (error) throw error
+  return data
+}
+export async function clientDecideQuote(token, jobId, approve) {
+  const { data, error } = await supabase.rpc('client_decide_quote', {
+    p_token: token, p_job: jobId, p_approve: approve,
+  })
+  if (error) throw error
+  return data
+}
+
 // ---------- זמינות ----------
 export async function fetchAvailability() {
   const { data, error } = await supabase.from('availability').select('*')
