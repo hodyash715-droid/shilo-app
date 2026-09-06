@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { AVAIL, availById, TODAY, isoLocal, parseDate, fmtDate, relLabel, shiftKindLabel } from '../data.js'
+import { AVAIL, AVAIL_CUSTOM, availById, shortTime, TODAY, isoLocal, fmtDate, shiftKindLabel } from '../data.js'
 import { EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
 
@@ -8,7 +8,8 @@ const startOfWeek = (d) => { const x = new Date(d); x.setDate(x.getDate() - x.ge
 
 export default function Team({ employees, shifts, jobs, availability, onSetAvail, onShiftSaved, onShiftDeleted }) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(TODAY))
-  const [picker, setPicker] = useState(null)   // {empId, date, name}
+  const [picker, setPicker] = useState(null)   // {empId, date, name, current}
+  const [cust, setCust] = useState({ from: '09:00', to: '17:00' })
   const [shiftEdit, setShiftEdit] = useState(undefined)
 
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -18,7 +19,7 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
   const todayIso = isoLocal(TODAY)
 
   const availMap = {}
-  for (const a of availability) availMap[`${a.employee_id}|${a.date}`] = a.status
+  for (const a of availability) availMap[`${a.employee_id}|${a.date}`] = a
 
   // משמרות שחסר בהן צוות
   const understaffed = shifts
@@ -85,7 +86,7 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
 
       {/* מקרא */}
       <div className="row wrap gap-3" style={{ marginBottom: 10 }}>
-        {AVAIL.map(a => (
+        {[...AVAIL, AVAIL_CUSTOM].map(a => (
           <span key={a.id} className="row gap-2" style={{ fontSize: 11.5, color: 'var(--ink45)' }}>
             <span style={{ width: 12, height: 8, borderRadius: 2, background: a.color }} />{a.label}
           </span>
@@ -134,11 +135,14 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
                   </div>
 
                   {dayIso.map((iso, c) => {
-                    const st = availMap[`${e.id}|${iso}`]
-                    const a = st ? availById[st] : null
+                    const av = availMap[`${e.id}|${iso}`]
+                    const a = av ? availById[av.status] : null
                     const daySh = shifts.filter(s => s.date === iso && (s.assigned || []).includes(e.id))
                     return (
-                      <button key={c} onClick={() => setPicker({ empId: e.id, date: iso, name: e.name })}
+                      <button key={c} onClick={() => {
+                        setCust({ from: av?.start_time || '09:00', to: av?.end_time || '17:00' })
+                        setPicker({ empId: e.id, date: iso, name: e.name, current: av })
+                      }}
                         style={{
                           width: CELL_W, flex: 'none', appearance: 'none', border: 0, cursor: 'pointer',
                           background: iso === todayIso ? 'rgba(238,196,33,.05)' : 'transparent',
@@ -146,6 +150,11 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
                           borderInlineEnd: '1px solid var(--hair)',
                         }}>
                         <div style={{ height: 5, borderRadius: 3, background: a ? a.color : 'var(--hair)' }} />
+                        {av?.status === 'custom' && (
+                          <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: AVAIL_CUSTOM.color, textAlign: 'center' }}>
+                            {shortTime(av.start_time)}–{shortTime(av.end_time)}
+                          </span>
+                        )}
                         {daySh.map(s => (
                           <span key={s.id} className="mono" style={{
                             fontSize: 9.5, fontWeight: 700, borderRadius: 3, padding: '2px 3px',
@@ -175,14 +184,47 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
             <div style={{ fontWeight: 700, marginBottom: 2 }}>{picker.name}</div>
             <div className="t-meta" style={{ marginBottom: 14 }}>{fmtDate(picker.date)}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {AVAIL.map(a => (
-                <button key={a.id} className="btn" style={{ justifyContent: 'flex-start', gap: 10, height: 46 }}
-                  onClick={() => { onSetAvail(picker.empId, picker.date, a.id); setPicker(null) }}>
-                  <span style={{ width: 14, height: 14, borderRadius: 4, background: a.color, flex: 'none' }} />
-                  {a.label}
-                </button>
-              ))}
-              <button className="btn btn-sm" style={{ color: 'var(--ink45)' }}
+              {AVAIL.map(a => {
+                const on = picker.current?.status === a.id
+                return (
+                  <button key={a.id} className="btn" style={{
+                    justifyContent: 'flex-start', gap: 10, height: 46,
+                    borderColor: on ? a.color : 'var(--line)',
+                    background: on ? 'var(--card-2)' : 'var(--card)',
+                  }}
+                    onClick={() => { onSetAvail(picker.empId, picker.date, a.id); setPicker(null) }}>
+                    <span style={{ width: 14, height: 14, borderRadius: 4, background: a.color, flex: 'none' }} />
+                    {a.label}
+                    {on && <span style={{ marginInlineStart: 'auto', color: a.color, fontWeight: 800 }}>✓</span>}
+                  </button>
+                )
+              })}
+
+              {/* טווח שעות חופשי */}
+              <div className="row gap-2" style={{ margin: '6px 0 2px' }}>
+                <span style={{ height: 1, background: 'var(--hair)', flex: 1 }} />
+                <span className="t-meta">או שעות מדויקות</span>
+                <span style={{ height: 1, background: 'var(--hair)', flex: 1 }} />
+              </div>
+              <div className="row gap-2">
+                <div className="grow">
+                  <div className="t-meta" style={{ marginBottom: 4 }}>משעה</div>
+                  <input className="field" type="time" dir="ltr" value={cust.from}
+                    onChange={e => setCust(c => ({ ...c, from: e.target.value }))} />
+                </div>
+                <div className="grow">
+                  <div className="t-meta" style={{ marginBottom: 4 }}>עד שעה</div>
+                  <input className="field" type="time" dir="ltr" value={cust.to}
+                    onChange={e => setCust(c => ({ ...c, to: e.target.value }))} />
+                </div>
+              </div>
+              <button className="btn btn-solid" style={{ height: 46, gap: 10 }}
+                onClick={() => { onSetAvail(picker.empId, picker.date, 'custom', cust.from, cust.to); setPicker(null) }}>
+                <span style={{ width: 14, height: 14, borderRadius: 4, background: AVAIL_CUSTOM.color, flex: 'none' }} />
+                שמור {shortTime(cust.from)}–{shortTime(cust.to)}
+              </button>
+
+              <button className="btn btn-sm" style={{ color: 'var(--ink45)', marginTop: 4 }}
                 onClick={() => { onSetAvail(picker.empId, picker.date, null); setPicker(null) }}>נקה</button>
             </div>
           </div>

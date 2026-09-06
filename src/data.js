@@ -22,14 +22,28 @@ export const SHIFT_KINDS = [
 ]
 export const shiftKindLabel = k => (SHIFT_KINDS.find(s => s.id === k) || {}).label || 'משמרת'
 
-// מצבי זמינות של עובד ליום
+// מצבי זמינות של עובד ליום — צבע לכל חלק ביום
 export const AVAIL = [
-  { id: 'full',    label: 'פנוי כל היום', color: '#3E9C68' },
-  { id: 'morning', label: 'בוקר בלבד',    color: '#EEC421' },
-  { id: 'evening', label: 'ערב ולילה',    color: '#C97A2B' },
-  { id: 'off',     label: 'לא פנוי',      color: '#A8382A' },
+  { id: 'full',      label: 'פנוי כל היום',  color: '#3E9C68' },
+  { id: 'morning',   label: 'בוקר בלבד',     color: '#EEC421' },
+  { id: 'afternoon', label: 'צהריים עד ערב', color: '#D9822B' },
+  { id: 'evening',   label: 'ערב ולילה',     color: '#6C7BD1' },
+  { id: 'off',       label: 'לא פנוי',       color: '#A8382A' },
 ]
-export const availById = Object.fromEntries(AVAIL.map(a => [a.id, a]))
+// טווח שעות חופשי שהעובד בוחר בעצמו
+export const AVAIL_CUSTOM = { id: 'custom', label: 'שעות מותאמות', color: '#2F9E8F' }
+
+export const availById = Object.fromEntries([...AVAIL, AVAIL_CUSTOM].map(a => [a.id, a]))
+
+// '09:00' -> '9' , '14:30' -> '14:30'
+export const shortTime = t => {
+  if (!t) return ''
+  const [h, m] = String(t).slice(0, 5).split(':')
+  return m === '00' ? String(Number(h)) : `${Number(h)}:${m}`
+}
+export const availLabel = (a) => a?.status === 'custom'
+  ? `${shortTime(a.start_time)}–${shortTime(a.end_time)}`
+  : (availById[a?.status]?.label || '')
 
 // קטגוריות פריטים
 export const CATEGORIES = {

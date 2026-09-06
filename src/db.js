@@ -154,10 +154,10 @@ export async function fetchAvailability() {
   return data
 }
 
-export async function setAvailability(employee_id, date, status) {
+export async function setAvailability(employee_id, date, status, start_time = null, end_time = null) {
   const { data, error } = await supabase
     .from('availability')
-    .upsert({ employee_id, date, status }, { onConflict: 'employee_id,date' })
+    .upsert({ employee_id, date, status, start_time, end_time }, { onConflict: 'employee_id,date' })
     .select().single()
   if (error) throw error
   return data

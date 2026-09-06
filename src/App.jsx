@@ -169,8 +169,8 @@ export default function App() {
   }
   const onInvDeleted = (id) => { setInventory(xs => xs.filter(x => x.id !== id)); showToast('הפריט נמחק') }
 
-  // זמינות עובד ליום
-  const onSetAvail = async (employee_id, date, status) => {
+  // זמינות עובד ליום (status קבוע, או 'custom' עם טווח שעות)
+  const onSetAvail = async (employee_id, date, status, start_time = null, end_time = null) => {
     const match = a => a.employee_id === employee_id && a.date === date
     if (!status) {
       setAvailabilityState(av => av.filter(a => !match(a)))
@@ -178,10 +178,9 @@ export default function App() {
       catch (e) { showToast('עדכון נכשל'); load() }
       return
     }
-    setAvailabilityState(av => av.some(match)
-      ? av.map(a => match(a) ? { ...a, status } : a)
-      : [...av, { employee_id, date, status }])
-    try { await saveAvailability(employee_id, date, status) }
+    const row = { employee_id, date, status, start_time, end_time }
+    setAvailabilityState(av => av.some(match) ? av.map(a => match(a) ? { ...a, ...row } : a) : [...av, row])
+    try { await saveAvailability(employee_id, date, status, start_time, end_time) }
     catch (e) { showToast('עדכון נכשל'); load() }
   }
 
