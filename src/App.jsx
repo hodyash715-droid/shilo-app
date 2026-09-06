@@ -4,6 +4,7 @@ import {
   fetchJobs, updateJob, fetchEmployees, fetchShifts, fetchInventory,
   fetchAvailability, setAvailability as saveAvailability, clearAvailability,
   claimEmployeeCode, fetchMyJobTitles, fetchClients,
+  fetchKoolisot, saveKoolisa, deleteKoolisa,
 } from './db.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
@@ -15,6 +16,7 @@ import MobileNav from './components/MobileNav.jsx'
 import Settings from './components/Settings.jsx'
 import Team from './components/Team.jsx'
 import Field from './components/Field.jsx'
+import Designer from './components/Designer.jsx'
 import WorkerApp from './components/WorkerApp.jsx'
 import ClientPortal from './components/ClientPortal.jsx'
 import { VERSION } from './version.js'
@@ -98,6 +100,7 @@ export default function App() {
   const [inventory, setInventory] = useState([])
   const [availability, setAvailabilityState] = useState([])
   const [clients, setClients] = useState([])
+  const [koolisot, setKoolisot] = useState([])
   const [loading, setLoading] = useState(false)
   const [dataReady, setDataReady] = useState(false)
   const [loadErr, setLoadErr] = useState('')
@@ -140,9 +143,13 @@ export default function App() {
         fetchInventory().catch(() => []),
         fetchAvailability().catch(() => []),
       ])
-      const cl = await fetchClients().catch(() => [])
+      const [cl, kl] = await Promise.all([
+        fetchClients().catch(() => []),
+        fetchKoolisot().catch(() => []),   // הטבלה אולי עוד לא נוצרה
+      ])
       setJobs(j.length ? j : mj)
-      setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av); setClients(cl)
+      setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av)
+      setClients(cl); setKoolisot(kl)
     }
     catch (e) { setLoadErr(e.message || String(e)) }
     finally { setLoading(false); setDataReady(true) }
@@ -231,6 +238,21 @@ export default function App() {
     catch (e) { showToast('עדכון נכשל'); load() }
   }
 
+  // קוליסות
+  const onKoolisaSave = async (k) => {
+    try {
+      const saved = await saveKoolisa(k)
+      setKoolisot(xs => xs.some(x => x.id === saved.id) ? xs.map(x => x.id === saved.id ? saved : x) : [saved, ...xs])
+      showToast('הקוליסה נשמרה')
+      return saved
+    } catch (e) { showToast('השמירה נכשלה — הרץ את koolisot.sql'); return null }
+  }
+  const onKoolisaDelete = async (id) => {
+    setKoolisot(xs => xs.filter(x => x.id !== id))
+    showToast('נמחקה')
+    try { await deleteKoolisa(id) } catch (e) { showToast('המחיקה נכשלה'); load() }
+  }
+
   const onInvSaved = (s) => {
     setInventory(xs => (xs.some(x => x.id === s.id) ? xs.map(x => x.id === s.id ? s : x) : [...xs, s])
       .sort((a, b) => a.name.localeCompare(b.name, 'he')))
@@ -317,6 +339,8 @@ export default function App() {
               onItemReturn={(jobId, i) => markReturned(jobId, i)}
               onAllReturned={(jobId) => markReturned(jobId, 'all')}
               onInvSaved={onInvSaved} onInvDeleted={onInvDeleted} />}
+            {view === 'design' && <Designer inventory={inventory} koolisot={koolisot}
+              onSave={onKoolisaSave} onDelete={onKoolisaDelete} />}
             {view === 'settings' && <Settings name={displayName(session.user?.email)}
               email={session.user?.email} onSignOut={() => supabase.auth.signOut()}
               employees={employees} onEmpSaved={onEmpSaved} onEmpDeleted={onEmpDeleted}

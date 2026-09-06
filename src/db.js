@@ -193,6 +193,31 @@ export async function deleteInvItem(id) {
   if (error) throw error
 }
 
+// ---------- קוליסות (תכנון פרמטרי) ----------
+export async function fetchKoolisot() {
+  const { data, error } = await supabase
+    .from('koolisot')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function saveKoolisa(k) {
+  const row = { name: k.name, preview: k.preview || {}, parts: k.parts || [], job_id: k.jobId || null }
+  const q = k.id
+    ? supabase.from('koolisot').update(row).eq('id', k.id)
+    : supabase.from('koolisot').insert(row)
+  const { data, error } = await q.select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteKoolisa(id) {
+  const { error } = await supabase.from('koolisot').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ---------- לקוחות / מפיקות (צד המנהל) ----------
 export async function fetchClients() {
   const { data, error } = await supabase.from('clients').select('*').order('name')
