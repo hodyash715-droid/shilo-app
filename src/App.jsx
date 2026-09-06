@@ -3,7 +3,7 @@ import { supabase, isConfigured } from './supabase.js'
 import {
   fetchJobs, updateJob, fetchEmployees, fetchShifts, fetchInventory,
   fetchAvailability, setAvailability as saveAvailability, clearAvailability,
-  findEmployeeByCode, linkEmployeeToUser,
+  claimEmployeeCode, fetchMyJobTitles,
 } from './db.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
@@ -122,14 +122,16 @@ export default function App() {
   const load = async () => {
     setLoading(true); setLoadErr('')
     try {
-      const [j, e, sh, inv, av] = await Promise.all([
-        fetchJobs(),
+      const [j, mj, e, sh, inv, av] = await Promise.all([
+        fetchJobs().catch(() => []),          // עובד חסום מהעבודות — יקבל []
+        fetchMyJobTitles().catch(() => []),   // ולכן מקבל רק שמות האירועים שלו
         fetchEmployees().catch(() => []),
         fetchShifts().catch(() => []),
         fetchInventory().catch(() => []),
         fetchAvailability().catch(() => []),
       ])
-      setJobs(j); setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av)
+      setJobs(j.length ? j : mj)
+      setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av)
     }
     catch (e) { setLoadErr(e.message || String(e)) }
     finally { setLoading(false); setDataReady(true) }
@@ -145,11 +147,8 @@ export default function App() {
     let cancelled = false
     ;(async () => {
       try {
-        const emp = await findEmployeeByCode(email.split('@')[0].toUpperCase())
-        if (!cancelled && emp && !emp.user_id) {
-          await linkEmployeeToUser(emp.id, session.user.id)
-          load()
-        }
+        const empId = await claimEmployeeCode(email.split('@')[0].toUpperCase(), session.user.id)
+        if (!cancelled && empId) load()
       } catch (e) { /* אין קוד תואם — יוצג מסך "לא מקושר" */ }
     })()
     return () => { cancelled = true }

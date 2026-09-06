@@ -109,6 +109,27 @@ export async function findEmployeeByCode(code) {
   return data
 }
 
+// תפיסת קוד הצטרפות. אחרי הידוק ההרשאות זה עובר דרך פונקציה מאובטחת בשרת;
+// לפני כן — נופל חזרה לשיטה הישירה. מחזיר את מזהה העובד או null.
+export async function claimEmployeeCode(code, userId) {
+  const c = String(code).toUpperCase()
+  const { data, error } = await supabase.rpc('claim_employee_code', { p_code: c })
+  if (!error) return data || null
+  // אין עדיין RPC (לפני הרצת הידוק ההרשאות)
+  const emp = await findEmployeeByCode(c)
+  if (!emp) return null
+  if (!emp.user_id) await linkEmployeeToUser(emp.id, userId)
+  else if (emp.user_id !== userId) return null
+  return emp.id
+}
+
+// שמות האירועים שהעובד משובץ אליהם (בלי מחירים/פריטים)
+export async function fetchMyJobTitles() {
+  const { data, error } = await supabase.rpc('my_job_titles')
+  if (error) return []
+  return (data || []).map(r => ({ ...r, items: [], team: [], status: 'installed' }))
+}
+
 export async function linkEmployeeToUser(empId, userId) {
   const { data, error } = await supabase
     .from('employees').update({ user_id: userId }).eq('id', empId).select().single()

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { supabase } from '../supabase.js'
-import { findEmployeeByCode, linkEmployeeToUser } from '../db.js'
+import { claimEmployeeCode } from '../db.js'
 
 // שם משתמש → אימייל. עובדים משתמשים בקוד ההצטרפות שלהם כשם משתמש.
 const ALIASES = { 'שי': 'shai' }
@@ -60,18 +60,13 @@ export default function Login() {
         uid = si?.user?.id
       }
       // מקשרים את החשבון לכרטיס העובד
-      const emp = await findEmployeeByCode(c)
-      if (!emp) {
+      const empId = await claimEmployeeCode(c, uid)
+      if (!empId) {
         await supabase.auth.signOut()
-        setBusy(false); setErr('קוד לא נמצא. בקש קוד מעודכן משי.')
+        setBusy(false)
+        setErr('הקוד לא נמצא או כבר שויך לחשבון אחר. בקש קוד מעודכן משי.')
         return
       }
-      if (emp.user_id && emp.user_id !== uid) {
-        await supabase.auth.signOut()
-        setBusy(false); setErr('הקוד הזה כבר שויך לחשבון אחר.')
-        return
-      }
-      if (!emp.user_id) await linkEmployeeToUser(emp.id, uid)
       window.location.reload()
     } catch (e2) {
       setBusy(false); setErr('ההרשמה נכשלה: ' + (e2.message || e2))
