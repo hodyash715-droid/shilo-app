@@ -195,7 +195,7 @@ body {
   .print-sheet, .print-sheet * { visibility: visible !important; }
   .print-sheet {
     position: fixed !important; inset: 0 !important;
-    width: 100% !important; height: auto !important;
+    width: 100% !important; height: auto !important; min-width: 0 !important;
     background: #fff !important; border-radius: 0 !important;
   }
   .print-sheet canvas { width: 100% !important; height: auto !important; }

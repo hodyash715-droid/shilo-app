@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { drawSheet } from '../designer/drawing.js'
 
 export default function DrawingSheet({ name, dims, parts, materials, stockOv, onClose }) {
@@ -19,9 +20,10 @@ export default function DrawingSheet({ name, dims, parts, materials, stockOv, on
     } catch (e) { setSaveErr('השמירה נחסמה בדפדפן — השתמש ב“הדפס / PDF”.') }
   }
 
-  return (
+  // מחוץ לעץ של המסך — אחרת ה"fade-in" כולא את החלון מתחת לכותרת
+  return createPortal((
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.72)',
+      position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,.82)',
       display: 'flex', flexDirection: 'column',
     }}>
       <div className="row between gap-2 no-print" style={{
@@ -40,9 +42,10 @@ export default function DrawingSheet({ name, dims, parts, materials, stockOv, on
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: 14, display: 'grid', placeItems: 'start center' }}>
+        {/* במסך צר גוללים לצדדים — שרטוט קטן מדי לא שווה כלום */}
         <div className="print-sheet" style={{
           background: '#fff', borderRadius: 4, boxShadow: '0 20px 50px rgba(0,0,0,.6)',
-          width: 'min(100%, 1100px)',
+          width: 'min(100%, 1100px)', minWidth: 760,
         }}>
           <canvas ref={cvRef} style={{ width: '100%', height: 'auto', display: 'block' }} />
         </div>
@@ -52,5 +55,5 @@ export default function DrawingSheet({ name, dims, parts, materials, stockOv, on
         </div>
       </div>
     </div>
-  )
+  ), document.body)
 }
