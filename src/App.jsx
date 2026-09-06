@@ -307,7 +307,9 @@ export default function App() {
                 onOpen={j => setOpenId(j.id)} onStatus={setStatus} onEdit={j => setEditTarget(j)}
                 shifts={shifts} employees={employees} />
             )}
-            {view === 'calendar' && <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)} />}
+            {view === 'calendar' && <Calendar jobs={jobs} onOpen={j => setOpenId(j.id)}
+              shifts={shifts} employees={employees} availability={availability}
+              onShiftSaved={onShiftSaved} onShiftDeleted={onShiftDeleted} />}
             {view === 'team' && <Team employees={employees} shifts={shifts} jobs={jobs}
               availability={availability} onSetAvail={onSetAvail}
               onShiftSaved={onShiftSaved} onShiftDeleted={onShiftDeleted} />}
