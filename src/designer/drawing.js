@@ -161,23 +161,38 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
       }
       ctx.closePath(); ctx.fill()
     }
-    const dimH = (a, b, y, label) => {          // מידה אופקית
+    // מידה אופקית. במרווח צר החצים יוצאים החוצה והמספר לצד — כמו בשרטוט אמיתי.
+    const dimH = (a, b, y, label) => {
+      const narrow = Math.abs(b - a) < 9
       line(a, y - 1.5, a, y + 1.5, THIN); line(b, y - 1.5, b, y + 1.5, THIN)
-      line(a, y, b, y, THIN)
-      arrow(a, y, 1); arrow(b, y, -1)
-      const mid = (a + b) / 2
-      ctx.fillStyle = '#fff'; ctx.fillRect(mid - 6, y - 3.6, 12, 3.4); ctx.fillStyle = INK
-      num(label, mid, y - 1, { size: 3 })
+      if (narrow) {
+        line(a - 5, y, b + 5, y, THIN)
+        arrow(a, y, -1); arrow(b, y, 1)
+        num(label, b + 6, y - 0.9, { size: 3, align: 'left' })
+      } else {
+        line(a, y, b, y, THIN)
+        arrow(a, y, 1); arrow(b, y, -1)
+        const mid = (a + b) / 2
+        ctx.fillStyle = '#fff'; ctx.fillRect(mid - 6, y - 3.6, 12, 3.4); ctx.fillStyle = INK
+        num(label, mid, y - 1, { size: 3 })
+      }
     }
-    const dimV = (a, b, x, label) => {          // מידה אנכית
+    const dimV = (a, b, x, label) => {          // a למעלה, b למטה
+      const narrow = Math.abs(b - a) < 9
       line(x - 1.5, a, x + 1.5, a, THIN); line(x - 1.5, b, x + 1.5, b, THIN)
-      line(x, a, x, b, THIN)
-      arrow(x, a, 'u'); arrow(x, b, 'd')
-      const mid = (a + b) / 2
-      ctx.save(); ctx.translate(x - 1.6, mid); ctx.rotate(-Math.PI / 2)
-      ctx.fillStyle = '#fff'; ctx.fillRect(-6, -3.4, 12, 3.4); ctx.fillStyle = INK
-      num(label, 0, -0.8, { size: 3 })
-      ctx.restore()
+      if (narrow) {
+        line(x, a - 5, x, b + 5, THIN)
+        arrow(x, a, 'd'); arrow(x, b, 'u')
+        num(label, x, a - 6, { size: 3 })
+      } else {
+        line(x, a, x, b, THIN)
+        arrow(x, a, 'u'); arrow(x, b, 'd')
+        const mid = (a + b) / 2
+        ctx.save(); ctx.translate(x - 1.6, mid); ctx.rotate(-Math.PI / 2)
+        ctx.fillStyle = '#fff'; ctx.fillRect(-6, -3.4, 12, 3.4); ctx.fillStyle = INK
+        num(label, 0, -0.8, { size: 3 })
+        ctx.restore()
+      }
     }
 
     const yDim = oy + h + 7
