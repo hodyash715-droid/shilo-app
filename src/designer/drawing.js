@@ -11,6 +11,11 @@ export const SHEET = { w: 297, h: 210, px: 5 }   // מ"מ · פיקסלים למ
 const RATIOS = [5, 10, 20, 25, 50, 100, 200]     // קני מידה מקובלים 1:N
 
 const INK = '#111'
+
+// בידוד כיוון: קנבס מפעיל bidi על המחרוזת, אז "לטה 2×3" מתהפך ל-"3×2".
+// עוטפים כל רצף מספרים ב-LRI…PDI כדי שיישאר משמאל לימין.
+const NUMRUN = /[0-9]+(?:\s*[.,:×x*/-]\s*[0-9]+)*%?/g
+const bidi = s => String(s).replace(NUMRUN, m => `⁦${m}⁩`)
 const THIN = 0.2, MED = 0.35, THICK = 0.6        // עובי קו במ"מ
 
 // חצי-מידות החלק בעולם (ס"מ), לפי הפרופיל האמיתי
@@ -90,7 +95,7 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
     ctx.textBaseline = o.base || 'alphabetic'
     ctx.direction = o.ltr ? 'ltr' : 'rtl'
     ctx.fillStyle = o.color || INK
-    ctx.fillText(String(s), x, y)
+    ctx.fillText(o.ltr ? String(s) : bidi(s), x, y)
   }
   const num = (s, x, y, o = {}) => txt(s, x, y, { ...o, ltr: true, align: o.align || 'center' })
 
