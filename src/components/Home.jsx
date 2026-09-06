@@ -22,10 +22,12 @@ function needOf(j) {
   if (j.quoteStatus === 'sent') return { kind: 'waiting', reason: 'ממתין לאישור הלקוח', action: 'פתח' }
   if (j.status === 'approval') return { kind: 'approval', reason: 'ממתין לאישור', action: 'אשר', hot: true }
   if (needsTeam(j)) return { kind: 'team', reason: 'חסר צוות', action: 'שבץ' }
-  if (j.status === 'inquiry') return { kind: 'inquiry', reason: 'פנייה חדשה — לתמחר', action: 'הצעה' }
+  if (j.status === 'inquiry') return quoteApproved(j)
+    ? { kind: 'start', reason: 'ההצעה אושרה — אפשר להתחיל', action: 'התחל' }
+    : { kind: 'inquiry', reason: 'פנייה חדשה — לתמחר', action: 'הצעה' }
   return null
 }
-const RANK = { overdue: 0, quote: 1, waiting: 2, approval: 3, team: 4, inquiry: 5 }
+const RANK = { overdue: 0, quote: 1, waiting: 2, approval: 3, start: 4, team: 5, inquiry: 6 }
 
 // עבודה שצריך לשבץ לה צוות: פעילה, ויש משמרת לא מאוישת (או שאין משמרות בכלל)
 function needsStaffing(j, shifts) {
@@ -184,6 +186,7 @@ export default function Home({ jobs, name, onOpen, onStatus, onEdit, shifts, emp
 
   const act = (job, need) => {
     if (need.kind === 'approval') onStatus(job.id, 'production')
+    else if (need.kind === 'start') onStatus(job.id, 'design')
     else if (need.kind === 'quote' || need.kind === 'waiting') onOpen(job)  // מסך ההצעה
     else onEdit(job)              // overdue / team / inquiry → פתיחה לעריכה
   }
