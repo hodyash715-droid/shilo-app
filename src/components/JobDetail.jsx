@@ -3,16 +3,25 @@ import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel
 import { Thumb, catLabel, EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
 import Thread from './Thread.jsx'
-import { fetchJobMessages, postJobMessage } from '../db.js'
+import FileList from './FileList.jsx'
+import { fetchJobMessages, postJobMessage, fetchJobFiles, uploadJobFile, deleteJobFile, signedFileUrl } from '../db.js'
 
 export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, onShiftSaved, onShiftDeleted, onQuote, koolisot = [], onDesign, clients = [], onShowPrices }) {
   const [shiftEdit, setShiftEdit] = useState(undefined) // undefined=closed, null=new, shift=edit
   const [msgs, setMsgs] = useState([])
+  const [files, setFiles] = useState([])
   const jobId = job?.id
+
+  const loadFiles = async (id) => {
+    const rows = await fetchJobFiles(id)
+    return Promise.all(rows.map(async f => ({ ...f, url: await signedFileUrl(f.path) })))
+  }
+
   useEffect(() => {
     if (!jobId) return
     let dead = false
     fetchJobMessages(jobId).then(r => { if (!dead) setMsgs(r) }).catch(() => {})
+    loadFiles(jobId).then(r => { if (!dead) setFiles(r) }).catch(() => {})
     return () => { dead = true }
   }, [jobId])
   if (!job) return null
@@ -215,6 +224,26 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
               })}
             </div>
           )}
+
+          {/* קבצים */}
+          <div className="row between" style={{ margin: '18px 0 8px' }}>
+            <div className="t-meta">קבצים ומיתוג</div>
+            {files.length > 0 && <div className="t-meta">{files.length}</div>}
+          </div>
+          <div style={{ marginBottom: 4 }}>
+            <FileList
+              files={files}
+              hint="לוגו, מותג, סקיצות. מה שתעלה כאן — הלקוח רואה בדף שלו."
+              onUpload={async (f) => {
+                await uploadJobFile(job.id, f)
+                setFiles(await loadFiles(job.id))
+              }}
+              onDelete={async (f) => {
+                await deleteJobFile(f)
+                setFiles(fs => fs.filter(x => x.id !== f.id))
+              }}
+            />
+          </div>
 
           {/* שיחה עם הלקוח */}
           {(() => {

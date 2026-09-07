@@ -363,3 +363,40 @@ export async function postJobMessage(jobId, body) {
   if (error) throw error
   return data
 }
+
+// ---------- קבצים על הזמנה (צד המנהל — ישירות, דרך ההרשאות) ----------
+const BUCKET = 'job-files'
+
+export async function fetchJobFiles(jobId) {
+  const { data, error } = await supabase
+    .from('job_files').select('*').eq('job_id', jobId).order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function signedFileUrl(path, secs = 3600) {
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, secs)
+  if (error) return null
+  return data?.signedUrl || null
+}
+
+export async function uploadJobFile(jobId, file) {
+  const safe = (file.name || 'file').replace(/[^\p{L}\p{N}._-]+/gu, '_').slice(-80)
+  const path = `${jobId}/${crypto.randomUUID()}-${safe}`
+  const up = await supabase.storage.from(BUCKET).upload(path, file, {
+    contentType: file.type || 'application/octet-stream', upsert: false,
+  })
+  if (up.error) throw up.error
+  const { data, error } = await supabase.from('job_files').insert({
+    job_id: jobId, from_client: false, author: 'שי',
+    path, name: file.name, size: file.size, mime: file.type,
+  }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteJobFile(f) {
+  await supabase.storage.from(BUCKET).remove([f.path])
+  const { error } = await supabase.from('job_files').delete().eq('id', f.id)
+  if (error) throw error
+}

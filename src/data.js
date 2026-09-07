@@ -142,3 +142,10 @@ export function quoteMessage(job, client, link) {
     `שילה — מיתוג והפקות`,
   ].join('\n')
 }
+
+// ---------- פרטי העסק ----------
+export const BUSINESS = {
+  name: 'שילה',
+  tagline: 'עיצוב ומיתוג לאירועים',
+  phone: '0506429998',      // שי
+}

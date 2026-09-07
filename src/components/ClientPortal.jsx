@@ -3,7 +3,9 @@ import { clientPortal, clientSubmitOrder, clientDecideQuote, clientPostMessage }
 import { Thumb } from './ui.jsx'
 import Thread from './Thread.jsx'
 import OrderProgress from './OrderProgress.jsx'
-import { fmtDate, relLabel, ils, CATEGORIES, shortTime, placeOf, wazeLink } from '../data.js'
+import FileList from './FileList.jsx'
+import { filesEnabled, listClientFiles, uploadClientFile, deleteClientFile } from '../files.js'
+import { fmtDate, relLabel, ils, CATEGORIES, shortTime, placeOf, wazeLink, waLink, BUSINESS } from '../data.js'
 
 const QSTATE = {
   needs_quote: { label: 'ממתין להצעת מחיר', color: '#EEC421' },
@@ -24,6 +26,10 @@ export default function ClientPortal({ token }) {
     catch (e) { setData(null) }
   }
   useEffect(() => { load() }, [token])
+  useEffect(() => {
+    if (!filesEnabled() || !data?.orders) return
+    data.orders.forEach(o => loadFiles(o.id))
+  }, [data])
 
   // ---- טופס הזמנה ----
   const [f, setF] = useState({ title: '', eventDate: '', time: '', venue: '', address: '', note: '' })
@@ -50,6 +56,14 @@ export default function ClientPortal({ token }) {
     setBusy(false)
   }
 
+  const [filesBy, setFilesBy] = useState({})          // jobId -> קבצים
+  const loadFiles = async (jobId) => {
+    if (!filesEnabled()) return
+    try {
+      const rows = await listClientFiles(token, jobId)
+      setFilesBy(m => ({ ...m, [jobId]: rows }))
+    } catch {}
+  }
   const [openThread, setOpenThread] = useState(null)   // id של הזמנה שהשיחה שלה פתוחה
   const [rejecting, setRejecting] = useState(null)     // id של הזמנה שנדחית
   const [reason, setReason] = useState('')
@@ -98,9 +112,17 @@ export default function ClientPortal({ token }) {
               <div className="t-meta truncate">עיצוב ומיתוג לאירועים</div>
             </div>
           </div>
-          <div style={{ textAlign: 'end', minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }} className="truncate">{client.name}</div>
-            <div className="t-meta truncate">{client.company}</div>
+          <div className="row gap-2" style={{ flex: '0 0 auto' }}>
+            <div style={{ textAlign: 'end', minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }} className="truncate">{client.name}</div>
+              <div className="t-meta truncate">{client.company}</div>
+            </div>
+            {BUSINESS.phone && (
+              <a className="btn btn-sm" title="וואטסאפ לשי" aria-label="וואטסאפ לשי"
+                style={{ flex: '0 0 auto', color: '#55C07E', textDecoration: 'none' }}
+                href={waLink(BUSINESS.phone, `היי שי, זו ${client.name}.`)}
+                target="_blank" rel="noreferrer">💬</a>
+            )}
           </div>
         </div>
       </header>
@@ -217,6 +239,20 @@ export default function ClientPortal({ token }) {
                             <button className="btn btn-sm btn-solid" disabled={busy}
                               onClick={() => decide(o.id, false, reason)}>שלח לשי</button>
                           </div>
+                        </div>
+                      )}
+
+                      {/* קבצים */}
+                      {filesEnabled() && (
+                        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hair)' }}>
+                          <div className="t-meta" style={{ marginBottom: 6 }}>קבצים ומיתוג</div>
+                          <FileList
+                            files={filesBy[o.id] || []}
+                            hint="לוגו, מיתוג, השראה — תמונות, PDF או ZIP עד 10MB"
+                            canDelete={f => f.from_client}
+                            onUpload={async (f) => { await uploadClientFile(token, o.id, f); await loadFiles(o.id) }}
+                            onDelete={async (f) => { await deleteClientFile(token, o.id, f.id); await loadFiles(o.id) }}
+                          />
                         </div>
                       )}
 
