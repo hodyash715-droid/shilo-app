@@ -103,7 +103,7 @@ export function isUrgent(job) {
   return n >= 0 && n <= 7 && job.status !== 'ready' && job.status !== 'installed'
 }
 
-export const ils = n => `${(Number(n) || 0).toLocaleString('en-US')}₪`
+export const ils = n => `${(Number(n) || 0).toLocaleString('en-US')} ₪`
 
 // קישור וואטסאפ עם הודעה מוכנה (0521234567 → 972521234567)
 export function waLink(phone, text) {
