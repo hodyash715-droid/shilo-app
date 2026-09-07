@@ -5,7 +5,7 @@
 
 // הכתובת של הפונקציה שנפרסה ב-Supabase (Edge Functions).
 // ריק = טרם הוגדר, וממשק הקבצים פשוט לא יוצג.
-export const FILES_FN = ''
+export const FILES_FN = 'https://bypgbgosywlgjdczrjhc.supabase.co/functions/v1/smooth-action'
 
 export const filesEnabled = () => Boolean(FILES_FN)
 
