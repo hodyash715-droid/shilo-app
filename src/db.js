@@ -18,6 +18,7 @@ const fromRow = r => ({
   address: r.address || '',
   eventTime: r.event_time ? String(r.event_time).slice(0, 5) : '',
   clientId: r.client_id || null,
+  showItemPrices: !!r.show_item_prices,
 })
 
 const toRow = j => ({
@@ -34,6 +35,7 @@ const toRow = j => ({
   address: j.address || null,
   event_time: j.eventTime || null,
   client_id: j.clientId || null,
+  show_item_prices: !!j.showItemPrices,
 })
 
 export async function fetchJobs() {
@@ -61,6 +63,7 @@ export async function updateJob(id, patch) {
   const map = { title:'title', client:'client', contact:'contact', eventDate:'event_date',
     status:'status', price:'price', items:'items', team:'team', note:'note',
     venue:'venue', address:'address', eventTime:'event_time', clientId:'client_id',
+    showItemPrices:'show_item_prices',
     quoteStatus:'quote_status', quoteSentAt:'quote_sent_at', quoteDecidedAt:'quote_decided_at' }
   for (const k in patch) if (map[k] !== undefined) row[map[k]] = patch[k]
   const { data, error } = await supabase

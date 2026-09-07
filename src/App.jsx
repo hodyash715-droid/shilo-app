@@ -270,6 +270,14 @@ export default function App() {
     catch (e) { showToast('עדכון נכשל'); load() }
   }
 
+  // רמת הפירוט שהלקוח רואה בהצעה
+  const onShowPrices = async (jobId, on) => {
+    setJobs(js => js.map(j => (j.id === jobId ? { ...j, showItemPrices: on } : j)))
+    showToast(on ? 'הלקוח יראה פירוט מחירים' : 'הלקוח יראה סה״כ בלבד')
+    try { await updateJob(jobId, { showItemPrices: on }) }
+    catch (e) { showToast('עדכון נכשל'); load() }
+  }
+
   // החזרת ציוד למחסן
   const markReturned = async (jobId, which) => {
     const job = jobs.find(j => j.id === jobId)
@@ -404,6 +412,8 @@ export default function App() {
           onShiftSaved={onShiftSaved} onShiftDeleted={onShiftDeleted}
           onQuote={onQuote}
           koolisot={koolisot}
+          clients={clients}
+          onShowPrices={onShowPrices}
           onDesign={(jobId, koolisaId) => {
             setDesignTarget({ jobId, koolisaId })
             setOpenId(null)

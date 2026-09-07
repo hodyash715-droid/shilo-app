@@ -118,3 +118,27 @@ export const placeOf = (j) => [j?.venue, j?.address].filter(Boolean).join(', ')
 export const wazeLink = (q) => `https://waze.com/ul?q=${encodeURIComponent(q)}&navigate=yes`
 export const mapsLink = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
 export const orderLabel = (j) => (j?.orderNo ? `#${j.orderNo}` : '')
+
+// ---------- הקישור האישי של המפיקה ----------
+export const portalLink = (token) =>
+  `${location.origin}${location.pathname}#/c/${encodeURIComponent(token || '')}`
+
+export const mailLink = (to, subject, body) =>
+  `mailto:${encodeURIComponent(to || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+
+// נוסח ההודעה שנשלחת עם הצעת המחיר
+export function quoteMessage(job, client, link) {
+  const who = (client?.name || '').split(' ')[0]
+  const when = job.eventDate ? ` (${fmtDate(job.eventDate)})` : ''
+  return [
+    `היי ${who},`,
+    ``,
+    `הצעת המחיר ל"${job.title}"${when} מוכנה${job.orderNo ? ` — הזמנה #${job.orderNo}` : ''}.`,
+    `סה״כ: ${ils(job.price)}`,
+    ``,
+    `לצפייה ולאישור:`,
+    link,
+    ``,
+    `שילה — מיתוג והפקות`,
+  ].join('\n')
+}

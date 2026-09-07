@@ -9,7 +9,7 @@ export const portalLink = (token) =>
 
 export default function ClientList({ clients, onSaved, onDeleted }) {
   const [adding, setAdding] = useState(false)
-  const [f, setF] = useState({ name: '', company: '', phone: '' })
+  const [f, setF] = useState({ name: '', company: '', phone: '', email: '' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [copied, setCopied] = useState(null)
@@ -21,9 +21,9 @@ export default function ClientList({ clients, onSaved, onDeleted }) {
     try {
       const saved = await createClientRec({
         name: f.name.trim(), company: f.company.trim() || null,
-        phone: f.phone.trim() || null, token: rndToken(),
+        phone: f.phone.trim() || null, email: f.email.trim() || null, token: rndToken(),
       })
-      onSaved(saved); setF({ name: '', company: '', phone: '' }); setAdding(false)
+      onSaved(saved); setF({ name: '', company: '', phone: '', email: '' }); setAdding(false)
     } catch (e) { setErr('שמירה נכשלה: ' + (e.message || e)) }
     setBusy(false)
   }
@@ -39,6 +39,7 @@ export default function ClientList({ clients, onSaved, onDeleted }) {
           <input className="field" placeholder="שם המפיקה (נועם פ)" value={f.name} onChange={e => setF(s => ({ ...s, name: e.target.value }))} />
           <input className="field" placeholder="חברה (הפקות ABC)" value={f.company} onChange={e => setF(s => ({ ...s, company: e.target.value }))} />
           <input className="field" dir="ltr" style={{ textAlign: 'start' }} placeholder="050-0000000" value={f.phone} onChange={e => setF(s => ({ ...s, phone: e.target.value }))} />
+          <input className="field" type="email" dir="ltr" style={{ textAlign: 'start' }} placeholder="מייל — לשליחת הצעות מחיר" value={f.email} onChange={e => setF(s => ({ ...s, email: e.target.value }))} />
           {err && <div style={{ color: '#E5735B', fontSize: 13 }}>{err}</div>}
           <div className="row gap-2">
             <button className="btn grow" onClick={() => { setAdding(false); setErr('') }}>ביטול</button>
@@ -66,7 +67,7 @@ export default function ClientList({ clients, onSaved, onDeleted }) {
                 <div className="row between gap-2">
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 15 }} className="truncate">{c.name}</div>
-                    <div className="t-meta truncate">{c.company || '—'}{c.phone ? ` · ${c.phone}` : ''}</div>
+                    <div className="t-meta truncate">{c.company || '—'}{c.phone ? ` · ${c.phone}` : ''}{c.email ? ` · ${c.email}` : ''}</div>
                   </div>
                   <button className="btn btn-ghost btn-sm" style={{ color: '#E5735B', flex: 'none' }}
                     onClick={() => { if (confirmDel === c.id) { deleteClientRec(c.id).then(() => onDeleted(c.id)) } else setConfirmDel(c.id) }}>

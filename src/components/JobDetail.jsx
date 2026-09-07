@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
-import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel, quoteOf, waLink, placeOf, wazeLink, mapsLink, shortTime } from '../data.js'
+import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel, quoteOf, waLink, placeOf, wazeLink, mapsLink, shortTime, portalLink, mailLink, quoteMessage } from '../data.js'
 import { Thumb, catLabel, EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
 
-export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, onShiftSaved, onShiftDeleted, onQuote, koolisot = [], onDesign }) {
+export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, onShiftSaved, onShiftDeleted, onQuote, koolisot = [], onDesign, clients = [], onShowPrices }) {
   const [shiftEdit, setShiftEdit] = useState(undefined) // undefined=closed, null=new, shift=edit
   if (!job) return null
   const curIdx = statusIndex(job.status)
@@ -79,8 +79,27 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
           {/* הצעת מחיר */}
           {(() => {
             const q = quoteOf(job)
-            const msg = `שלום ${job.client},\nמצורפת הצעת מחיר לאירוע "${job.title}" בתאריך ${fmtDate(job.eventDate)}.\nסה״כ: ${ils(job.price || itemsTotal)}\nנשמח לאישורך.`
-            const wa = waLink(job.contact, msg)
+            const total = job.price || itemsTotal
+            const producer = clients.find(c => c.id === job.clientId) || null
+            const link = producer ? portalLink(producer.token) : null
+            const msg = link
+              ? quoteMessage({ ...job, price: total }, producer, link)
+              : `שלום ${job.client},
+מצורפת הצעת מחיר לאירוע "${job.title}" בתאריך ${fmtDate(job.eventDate)}.
+סה״כ: ${ils(total)}
+נשמח לאישורך.`
+            const wa = waLink(producer?.phone || job.contact, msg)
+            const mail = producer?.email
+              ? mailLink(producer.email, `הצעת מחיר — ${job.title}`, msg)
+              : null
+
+            // שליחה וסימון באותה לחיצה — אחרת שוכחים לסמן
+            const sendVia = (href) => {
+              if (href) window.open(href, '_blank', 'noopener')
+              if (job.quoteStatus !== 'sent') onQuote(job.id, 'sent')
+            }
+            const pending = job.quoteStatus !== 'sent' && job.quoteStatus !== 'approved'
+
             return (
               <>
                 <div className="t-meta" style={{ marginBottom: 8 }}>הצעת מחיר</div>
@@ -90,12 +109,39 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
                 }}>
                   <div className="row between gap-2" style={{ marginBottom: 10 }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: q.color }}>{q.label}</span>
-                    <span className="mono" style={{ fontWeight: 600 }}>{ils(job.price || itemsTotal)}</span>
+                    <span className="mono" style={{ fontWeight: 600 }}>{ils(total)}</span>
                   </div>
+
+                  {/* שליחה */}
+                  {(pending || job.quoteStatus === 'sent') && (
+                    <>
+                      <div className="t-meta" style={{ marginBottom: 6 }}>
+                        {pending ? 'שלח ללקוח' : 'שלח שוב'}
+                      </div>
+                      <div className="row gap-2 wrap" style={{ marginBottom: 10 }}>
+                        {wa && <button className="btn btn-sm" style={{ color: '#55C07E' }}
+                          onClick={() => sendVia(wa)}>📱 וואטסאפ</button>}
+                        {mail && <button className="btn btn-sm"
+                          onClick={() => sendVia(mail)}>✉️ מייל</button>}
+                        {pending && <button className="btn btn-sm"
+                          onClick={() => sendVia(null)}>📞 נמסר טלפונית</button>}
+                      </div>
+                      {!producer && (
+                        <div className="t-meta" style={{ marginBottom: 10, color: '#D9822B' }}>
+                          העבודה לא משויכת למפיקה — ההודעה תישלח בלי קישור לאישור.
+                          שייך אותה בעריכת העבודה.
+                        </div>
+                      )}
+                      {producer && !producer.email && (
+                        <div className="t-meta" style={{ marginBottom: 10 }}>
+                          אין מייל ל{producer.name} — אפשר להוסיף בהגדרות.
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* החלטה */}
                   <div className="row gap-2 wrap">
-                    {job.quoteStatus !== 'sent' && job.quoteStatus !== 'approved' && (
-                      <button className="btn btn-sm btn-solid" onClick={() => onQuote(job.id, 'sent')}>סמן: ההצעה נשלחה</button>
-                    )}
                     {job.quoteStatus === 'sent' && (
                       <>
                         <button className="btn btn-sm btn-solid" onClick={() => onQuote(job.id, 'approved')}>הלקוח אישר ✓</button>
@@ -105,12 +151,21 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
                     {job.quoteStatus === 'approved' && (
                       <button className="btn btn-sm" onClick={() => onQuote(job.id, 'sent')}>בטל אישור</button>
                     )}
-                    {wa && (
-                      <a className="btn btn-sm" href={wa} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: '#55C07E' }}>
-                        שלח בוואטסאפ
-                      </a>
-                    )}
                   </div>
+
+                  {/* רמת הפירוט שהלקוח רואה */}
+                  {onShowPrices && (
+                    <label className="row gap-2" style={{
+                      marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hair)',
+                      cursor: 'pointer', fontSize: 13, color: 'var(--ink70)',
+                    }}>
+                      <input type="checkbox" checked={!!job.showItemPrices}
+                        onChange={e => onShowPrices(job.id, e.target.checked)}
+                        style={{ width: 16, height: 16, accentColor: 'var(--gold)' }} />
+                      הצג ללקוח מחיר לכל פריט
+                      <span className="t-meta">{job.showItemPrices ? '' : '(רואה סה״כ בלבד)'}</span>
+                    </label>
+                  )}
                 </div>
               </>
             )

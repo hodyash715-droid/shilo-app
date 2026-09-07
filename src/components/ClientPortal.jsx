@@ -132,10 +132,29 @@ export default function ClientPortal({ token }) {
                       <div style={{ fontWeight: 700, fontSize: 16 }}>{o.title}</div>
                       {o.venue && <div className="t-meta" style={{ marginTop: 2 }}>{o.venue}</div>}
 
+                      {/* פירוט: עם מחירים רק אם שי בחר להציג */}
                       {o.items?.length > 0 && (
-                        <div className="t-meta" style={{ marginTop: 8, lineHeight: 1.7 }}>
-                          {o.items.map((it, i) => <div key={i}>• {it.qty} × {it.name}</div>)}
-                        </div>
+                        o.itemized ? (
+                          <div style={{ marginTop: 10 }}>
+                            {o.items.map((it, i) => (
+                              <div key={i} className="row between gap-2" style={{
+                                fontSize: 13, padding: '5px 0',
+                                borderTop: i ? '1px solid var(--hair)' : 0,
+                              }}>
+                                <span style={{ minWidth: 0 }} className="truncate">
+                                  <span className="mono">{it.qty}</span> × {it.name}
+                                </span>
+                                {it.price != null && (
+                                  <span className="mono t-meta" style={{ flex: '0 0 auto' }}>{ils(it.price)}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="t-meta" style={{ marginTop: 8, lineHeight: 1.7 }}>
+                            {o.items.map((it, i) => <div key={i}>• {it.qty} × {it.name}</div>)}
+                          </div>
+                        )
                       )}
 
                       {(o.quote_status === 'sent' || o.quote_status === 'approved') && (
