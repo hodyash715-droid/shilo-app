@@ -4,11 +4,13 @@
 // כי ספריות npm של Node לא עולות באמינות ב-Deno.
 // ============================================================
 
-const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!
-const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const VAPID_PUBLIC  = Deno.env.get('VAPID_PUBLIC')!
-const VAPID_PRIVATE = Deno.env.get('VAPID_PRIVATE')!
-const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:shai@shilo.app'
+// trim חובה: רווח או שורה חדשה שנדבקו בהדבקת הסוד שוברים את החתימה
+const env = (k: string) => (Deno.env.get(k) ?? '').trim()
+const SUPABASE_URL  = env('SUPABASE_URL')
+const SERVICE_KEY   = env('SUPABASE_SERVICE_ROLE_KEY')
+const VAPID_PUBLIC  = env('VAPID_PUBLIC')
+const VAPID_PRIVATE = env('VAPID_PRIVATE')
+const VAPID_SUBJECT = env('VAPID_SUBJECT') || 'mailto:shai@shilo.app'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -123,13 +125,17 @@ Deno.serve(async (req) => {
 
   // בדיקת חיים
   if (req.method === 'GET') {
-    return json({
-      alive: true,
-      env: {
-        url: !!SUPABASE_URL, service: !!SERVICE_KEY,
-        vapidPublic: !!VAPID_PUBLIC, vapidPrivate: !!VAPID_PRIVATE, subject: VAPID_SUBJECT,
-      },
-    })
+    const diag: Record<string, unknown> = {
+      url: !!SUPABASE_URL, service: !!SERVICE_KEY, subject: VAPID_SUBJECT,
+      publicLen: VAPID_PUBLIC.length, publicOk: VAPID_PUBLIC.length === 87,
+      privateLen: VAPID_PRIVATE.length, privateOk: VAPID_PRIVATE.length === 43,
+    }
+    try {
+      const h = await vapidAuth('https://fcm.googleapis.com/fcm/send/x')
+      diag.signing = 'ok'
+      diag.headerStart = h.slice(0, 40)
+    } catch (e) { diag.signing = 'FAILED: ' + String(e).slice(0, 200) }
+    return json({ alive: true, env: diag })
   }
 
   try {
