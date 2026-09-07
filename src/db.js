@@ -288,9 +288,17 @@ export async function clientSubmitOrder(token, o) {
   if (error) throw error
   return data
 }
-export async function clientDecideQuote(token, jobId, approve) {
+export async function clientPostMessage(token, jobId, body, kind = 'message') {
+  const { data, error } = await supabase.rpc('client_post_message', {
+    p_token: token, p_job: jobId, p_body: body, p_kind: kind,
+  })
+  if (error) throw error
+  return data
+}
+
+export async function clientDecideQuote(token, jobId, approve, reason = null) {
   const { data, error } = await supabase.rpc('client_decide_quote', {
-    p_token: token, p_job: jobId, p_approve: approve,
+    p_token: token, p_job: jobId, p_approve: approve, p_reason: reason,
   })
   if (error) throw error
   return data
@@ -338,4 +346,20 @@ export async function markAllNotifsRead(ids) {
   if (!ids.length) return
   const { error } = await supabase.from('notifications').update({ is_read: true }).in('id', ids)
   if (error) throw error
+}
+
+// ---------- שיחה על ההזמנה (צד המנהל) ----------
+export async function fetchJobMessages(jobId) {
+  const { data, error } = await supabase
+    .from('job_messages').select('*').eq('job_id', jobId).order('created_at')
+  if (error) throw error
+  return data
+}
+
+export async function postJobMessage(jobId, body) {
+  const { data, error } = await supabase.from('job_messages')
+    .insert({ job_id: jobId, from_client: false, author: 'שי', body, kind: 'message' })
+    .select().single()
+  if (error) throw error
+  return data
 }

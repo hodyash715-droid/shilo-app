@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { clientPortal, clientSubmitOrder, clientDecideQuote } from '../db.js'
+import { clientPortal, clientSubmitOrder, clientDecideQuote, clientPostMessage } from '../db.js'
+import Thread from './Thread.jsx'
 import { fmtDate, relLabel, ils, CATEGORIES } from '../data.js'
 
 const QSTATE = {
@@ -47,11 +48,26 @@ export default function ClientPortal({ token }) {
     setBusy(false)
   }
 
-  const decide = async (jobId, approve) => {
+  const [openThread, setOpenThread] = useState(null)   // id של הזמנה שהשיחה שלה פתוחה
+  const [rejecting, setRejecting] = useState(null)     // id של הזמנה שנדחית
+  const [reason, setReason] = useState('')
+
+  const decide = async (jobId, approve, why = null) => {
     setBusy(true)
-    try { await clientDecideQuote(token, jobId, approve); await load() }
+    try {
+      await clientDecideQuote(token, jobId, approve, why)
+      setRejecting(null); setReason('')
+      await load()
+      setMsg(approve ? 'ההצעה אושרה ✓ שי מעודכן' : 'נשלח לשי')
+    }
     catch (e) { setMsg('הפעולה נכשלה') }
     setBusy(false)
+  }
+
+  const post = async (jobId, body, kind) => {
+    await clientPostMessage(token, jobId, body, kind)
+    await load()
+    setMsg(kind === 'change' ? 'בקשת השינוי נשלחה לשי ✓' : 'ההודעה נשלחה ✓')
   }
 
   if (data === undefined) return <div style={{ minHeight: '100%', display: 'grid', placeItems: 'center' }} className="muted">טוען…</div>
@@ -164,14 +180,63 @@ export default function ClientPortal({ token }) {
                         </div>
                       )}
 
-                      {o.quote_status === 'sent' && (
+                      {o.quote_status === 'sent' && rejecting !== o.id && (
                         <div className="row gap-2" style={{ marginTop: 12 }}>
                           <button className="btn btn-solid grow" style={{ height: 46 }} disabled={busy}
                             onClick={() => decide(o.id, true)}>אישור ההצעה ✓</button>
                           <button className="btn" style={{ height: 46, color: '#E5735B' }} disabled={busy}
-                            onClick={() => decide(o.id, false)}>דחייה</button>
+                            onClick={() => { setRejecting(o.id); setReason('') }}>לא מתאים</button>
                         </div>
                       )}
+
+                      {/* דחייה עם סיבה — כדי ששי ידע מה לתקן */}
+                      {o.quote_status === 'sent' && rejecting === o.id && (
+                        <div style={{ marginTop: 12 }}>
+                          <div className="t-meta" style={{ marginBottom: 6 }}>מה לא מתאים? (יעזור לשי לתקן)</div>
+                          <textarea className="field" value={reason} onChange={e => setReason(e.target.value)}
+                            placeholder="למשל: יקר לי — אפשר בלי השטיח?"
+                            style={{ height: 70, padding: '9px 11px', resize: 'vertical' }} />
+                          <div className="row gap-2" style={{ marginTop: 8 }}>
+                            <button className="btn btn-sm" onClick={() => setRejecting(null)}>ביטול</button>
+                            <div className="grow" />
+                            <button className="btn btn-sm btn-solid" disabled={busy}
+                              onClick={() => decide(o.id, false, reason)}>שלח לשי</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* שיחה ובקשת שינוי */}
+                      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hair)' }}>
+                        {openThread === o.id ? (
+                          <>
+                            <div className="row between" style={{ marginBottom: 8 }}>
+                              <span className="t-meta">שיחה עם שי</span>
+                              <button className="btn btn-ghost btn-sm" onClick={() => setOpenThread(null)}>סגור</button>
+                            </div>
+                            <Thread
+                              messages={o.messages || []}
+                              mine="client"
+                              placeholder={o.quote_status === 'approved'
+                                ? 'רוצה להוסיף או לשנות משהו?'
+                                : 'שאלה או הערה לשי…'}
+                              onSend={(text) => post(o.id, text,
+                                o.quote_status === 'approved' ? 'change' : 'message')}
+                            />
+                            {o.quote_status === 'approved' && (
+                              <div className="t-meta" style={{ marginTop: 8, lineHeight: 1.7 }}>
+                                שינוי אחרי אישור מחזיר את ההזמנה לתמחור, ושי ישלח הצעה מעודכנת.
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <button className="btn btn-sm" style={{ width: '100%' }}
+                            onClick={() => setOpenThread(o.id)}>
+                            {o.messages?.length
+                              ? `💬 שיחה (${o.messages.length})`
+                              : (o.quote_status === 'approved' ? '✏️ בקשת שינוי' : '💬 שאלה לשי')}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}

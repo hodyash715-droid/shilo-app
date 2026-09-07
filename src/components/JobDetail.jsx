@@ -1,10 +1,20 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel, quoteOf, waLink, placeOf, wazeLink, mapsLink, shortTime, portalLink, mailLink, quoteMessage } from '../data.js'
 import { Thumb, catLabel, EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
+import Thread from './Thread.jsx'
+import { fetchJobMessages, postJobMessage } from '../db.js'
 
 export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, onShiftSaved, onShiftDeleted, onQuote, koolisot = [], onDesign, clients = [], onShowPrices }) {
   const [shiftEdit, setShiftEdit] = useState(undefined) // undefined=closed, null=new, shift=edit
+  const [msgs, setMsgs] = useState([])
+  const jobId = job?.id
+  useEffect(() => {
+    if (!jobId) return
+    let dead = false
+    fetchJobMessages(jobId).then(r => { if (!dead) setMsgs(r) }).catch(() => {})
+    return () => { dead = true }
+  }, [jobId])
   if (!job) return null
   const curIdx = statusIndex(job.status)
   const urgent = isUrgent(job)
@@ -205,6 +215,38 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
               })}
             </div>
           )}
+
+          {/* שיחה עם הלקוח */}
+          {(() => {
+            const producer = clients.find(c => c.id === job.clientId) || null
+            const last = msgs[msgs.length - 1]
+            const waReply = producer?.phone || job.contact
+            const send = async (text) => {
+              const saved = await postJobMessage(job.id, text)
+              setMsgs(m => [...m, saved])
+              const w = waLink(waReply, text)
+              if (w) window.open(w, '_blank', 'noopener')   // שהיא באמת תראה
+            }
+            return (
+              <>
+                <div className="row between" style={{ margin: '18px 0 8px' }}>
+                  <div className="t-meta">שיחה עם הלקוח</div>
+                  {msgs.length > 0 && <div className="t-meta">{msgs.length} הודעות</div>}
+                </div>
+                {msgs.length === 0 && (
+                  <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+                    אין עדיין הודעות. מה שתכתוב כאן יישמר בכרטיס ויישלח גם בוואטסאפ.
+                  </div>
+                )}
+                <div style={{ marginBottom: 18 }}>
+                  <Thread messages={msgs} mine="manager" onSend={send} compact
+                    placeholder="תשובה ללקוח…"
+                    extraAction={last?.from_client
+                      ? <span className="t-meta">אחרון: {last.author}</span> : null} />
+                </div>
+              </>
+            )
+          })()}
 
           {/* קוליסות מתוכננות */}
           {onDesign && (
