@@ -149,3 +149,13 @@ export const BUSINESS = {
   tagline: 'עיצוב ומיתוג לאירועים',
   phone: '0506429998',      // שי
 }
+
+// נוסח וואטסאפ מהמפיקה לשי, עם ההקשר של ההזמנה
+export function clientWaMessage(client, order, lastBody) {
+  const who = (client?.name || '').split(' ')[0]
+  const no = order?.order_no ? ` #${order.order_no}` : ''
+  const head = `היי שי, זו ${who}.`
+  if (!order) return head
+  const about = `לגבי "${order.title}"${no}${order.event_date ? ` (${fmtDate(order.event_date)})` : ''}:`
+  return lastBody ? `${head}\n${about}\n${lastBody}` : `${head}\n${about}`
+}

@@ -4,7 +4,7 @@ import Thread from './Thread.jsx'
 import OrderProgress from './OrderProgress.jsx'
 import FileList from './FileList.jsx'
 import { filesEnabled, listClientFiles, uploadClientFile, deleteClientFile } from '../files.js'
-import { fmtDate, relLabel, ils, CATEGORIES, shortTime, placeOf, wazeLink, waLink, BUSINESS } from '../data.js'
+import { fmtDate, relLabel, ils, CATEGORIES, shortTime, placeOf, wazeLink, waLink, BUSINESS, clientWaMessage } from '../data.js'
 
 const QSTATE = {
   needs_quote: { label: 'ממתין להצעת מחיר', color: 'var(--gold-fg)' },
@@ -90,6 +90,10 @@ export default function ClientPortal({ token }) {
     await clientPostMessage(token, jobId, body, kind)
     await load()
     setMsg(kind === 'change' ? 'בקשת השינוי נשלחה לשי ✓' : 'ההודעה נשלחה ✓')
+    // שי יקבל התראה, אבל וואטסאפ מבטיח שהוא באמת יראה
+    const order = data?.orders?.find(o => o.id === jobId)
+    const wa = BUSINESS.phone && waLink(BUSINESS.phone, clientWaMessage(client, order, body))
+    if (wa) window.open(wa, '_blank', 'noopener')
   }
 
   if (data === undefined) return <div style={{ minHeight: '100%', display: 'grid', placeItems: 'center' }} className="muted">טוען…</div>
@@ -105,6 +109,10 @@ export default function ClientPortal({ token }) {
 
   const { client, orders = [], catalog = [] } = data
   const pickedCount = Object.values(picked).reduce((a, b) => a + b, 0)
+  // ההזמנה שהכי "חיה" כרגע — היא ההקשר הטבעי לפנייה לשי
+  const hotOrder = orders.find(o => o.quote_status === 'sent')
+    || orders.find(o => ['needs_quote', 'rejected'].includes(o.quote_status))
+    || orders[0] || null
   const awaiting = orders.filter(o => o.quote_status === 'sent')
 
   return (
@@ -129,7 +137,7 @@ export default function ClientPortal({ token }) {
                   flex: '0 0 auto', color: 'var(--wa)', textDecoration: 'none',
                   borderColor: 'var(--wa)', gap: 5,
                 }}
-                href={waLink(BUSINESS.phone, `היי שי, זו ${client.name}.`)}
+                href={waLink(BUSINESS.phone, clientWaMessage(client, hotOrder))}
                 target="_blank" rel="noreferrer">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2m0 2a8 8 0 1 1-4.1 14.9l-.3-.2-2.6.7.7-2.5-.2-.3A8 8 0 0 1 12 4m-3.4 4c-.2 0-.5.1-.7.4-.2.3-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.6 4 3.5 2 .8 2.4.6 2.8.6.4 0 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1l-.6-.3s-1.2-.6-1.4-.7c-.2-.1-.4-.1-.5.1l-.7.9c-.1.2-.3.2-.5.1-.2-.1-1-.4-1.9-1.2-.7-.6-1.2-1.4-1.3-1.6-.1-.2 0-.4.1-.5l.4-.5.3-.5v-.4l-.7-1.7c-.2-.4-.4-.4-.5-.4z"/>
@@ -177,7 +185,6 @@ export default function ClientPortal({ token }) {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {orders.map(o => {
-                  const q = QSTATE[o.quote_status] || QSTATE.none
                   return (
                     <div key={o.id} className="card" style={{ padding: 14, borderColor: o.quote_status === 'sent' ? 'var(--warn)' : undefined }}>
                       <div className="row between gap-2">
@@ -297,6 +304,16 @@ export default function ClientPortal({ token }) {
                               <span className="t-meta">שיחה עם שי</span>
                               <button className="btn btn-ghost btn-sm" onClick={() => setOpenThread(null)}>סגור</button>
                             </div>
+                            {(() => {
+                              const last = [...(o.messages || [])].reverse().find(m => m.from_client)
+                              const wa = BUSINESS.phone && waLink(BUSINESS.phone, clientWaMessage(client, o, last?.body))
+                              return wa ? (
+                                <a className="btn btn-sm" href={wa} target="_blank" rel="noreferrer"
+                                  style={{ width: '100%', marginBottom: 8, color: 'var(--wa)', textDecoration: 'none' }}>
+                                  {last ? 'שלחי גם בוואטסאפ לשי' : 'לכתוב לשי בוואטסאפ'}
+                                </a>
+                              ) : null
+                            })()}
                             <Thread
                               messages={o.messages || []}
                               mine="client"
