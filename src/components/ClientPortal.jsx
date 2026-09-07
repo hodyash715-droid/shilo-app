@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { clientPortal, clientSubmitOrder, clientDecideQuote, clientPostMessage } from '../db.js'
+import { Thumb } from './ui.jsx'
 import Thread from './Thread.jsx'
-import { fmtDate, relLabel, ils, CATEGORIES } from '../data.js'
+import OrderProgress from './OrderProgress.jsx'
+import { fmtDate, relLabel, ils, CATEGORIES, shortTime, placeOf, wazeLink } from '../data.js'
 
 const QSTATE = {
   needs_quote: { label: 'ממתין להצעת מחיר', color: '#EEC421' },
@@ -82,10 +84,11 @@ export default function ClientPortal({ token }) {
   )
 
   const { client, orders = [], catalog = [] } = data
+  const pickedCount = Object.values(picked).reduce((a, b) => a + b, 0)
   const awaiting = orders.filter(o => o.quote_status === 'sent')
 
   return (
-    <div style={{ minHeight: '100%', paddingBottom: 40 }}>
+    <div style={{ minHeight: '100%', paddingBottom: view === 'new' ? 96 : 40 }}>
       <header style={{ borderBottom: '1px solid var(--line)', background: 'var(--card)' }}>
         <div style={{ maxWidth: 620, margin: '0 auto', padding: '14px 16px' }} className="row between gap-3">
           <div className="row gap-3" style={{ minWidth: 0 }}>
@@ -141,12 +144,24 @@ export default function ClientPortal({ token }) {
                   const q = QSTATE[o.quote_status] || QSTATE.none
                   return (
                     <div key={o.id} className="card" style={{ padding: 14, borderColor: o.quote_status === 'sent' ? '#D9822B' : undefined }}>
-                      <div className="row between gap-2" style={{ marginBottom: 6 }}>
-                        <span className="chip" style={{ background: 'var(--card-2)', color: q.color }}>{q.label}</span>
-                        {o.event_date && <span className="t-meta">{fmtDate(o.event_date)}</span>}
+                      <div className="row between gap-2">
+                        <span className="mono t-meta">{o.order_no ? `#${o.order_no}` : ''}</span>
+                        <span className="t-meta">
+                          {o.event_date ? fmtDate(o.event_date) : 'ללא תאריך'}
+                          {o.event_time ? ` · ${shortTime(o.event_time)}` : ''}
+                        </span>
                       </div>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{o.title}</div>
-                      {o.venue && <div className="t-meta" style={{ marginTop: 2 }}>{o.venue}</div>}
+                      <div style={{ fontWeight: 700, fontSize: 17, marginTop: 3 }}>{o.title}</div>
+                      {(o.venue || o.address) && (
+                        <div className="row between gap-2" style={{ marginTop: 4 }}>
+                          <span className="t-meta truncate">📍 {o.venue || o.address}</span>
+                          <a className="t-meta" style={{ flex: '0 0 auto', color: 'var(--gold-fg)' }}
+                            href={wazeLink(placeOf({ venue: o.venue, address: o.address }))}
+                            target="_blank" rel="noreferrer">ניווט</a>
+                        </div>
+                      )}
+
+                      <OrderProgress status={o.quote_status} />
 
                       {/* פירוט: עם מחירים רק אם שי בחר להציג */}
                       {o.items?.length > 0 && (
@@ -277,27 +292,41 @@ export default function ClientPortal({ token }) {
 
               <div>
                 <div className="t-meta" style={{ marginBottom: 8 }}>מה נדרש? (אפשר לבחור ואפשר לכתוב)</div>
-                {catalog.length > 0 && (
-                  <div className="card" style={{ overflow: 'hidden', marginBottom: 10 }}>
-                    {catalog.map((c, i) => {
-                      const n = picked[c.name] || 0
-                      return (
-                        <div key={c.name} className="row gap-2" style={{
-                          padding: '10px 12px', borderTop: i ? '1px solid var(--hair)' : 0,
-                          background: n ? 'var(--gold-bg)' : 'transparent',
-                        }}>
-                          <div className="grow" style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 600 }} className="truncate">{c.name}</div>
-                            <div className="t-meta">{CATEGORIES[c.category] || ''}</div>
-                          </div>
-                          {n > 0 && <button className="btn btn-sm" style={{ width: 38 }} onClick={() => bump(c.name, -1)}>−</button>}
-                          {n > 0 && <span className="mono" style={{ width: 22, textAlign: 'center', fontWeight: 700 }}>{n}</span>}
-                          <button className="btn btn-sm" style={{ width: 38 }} onClick={() => bump(c.name, +1)}>+</button>
+                {catalog.length > 0 && (() => {
+                  // קיבוץ לפי קטגוריה — 14 שורות זהות זה קיר, לא קטלוג
+                  const groups = {}
+                  catalog.forEach(c => { (groups[c.category || 'other'] ||= []).push(c) })
+                  return Object.entries(groups).map(([cat, list]) => {
+                    const inGroup = list.reduce((n, c) => n + (picked[c.name] || 0), 0)
+                    return (
+                      <div key={cat} style={{ marginBottom: 10 }}>
+                        <div className="row between" style={{ margin: '0 0 6px' }}>
+                          <span style={{ fontWeight: 700, fontSize: 13.5 }}>{CATEGORIES[cat] || 'אחר'}</span>
+                          {inGroup > 0 && <span className="chip chip-go">{inGroup} נבחרו</span>}
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
+                        <div className="card" style={{ overflow: 'hidden' }}>
+                          {list.map((c, i) => {
+                            const n = picked[c.name] || 0
+                            return (
+                              <div key={c.name} className="row gap-2" style={{
+                                padding: '9px 11px', borderTop: i ? '1px solid var(--hair)' : 0,
+                                background: n ? 'var(--gold-bg)' : 'transparent',
+                              }}>
+                                <Thumb cat={c.category} size={34} />
+                                <div className="grow" style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 14, fontWeight: 600 }} className="truncate">{c.name}</div>
+                                </div>
+                                {n > 0 && <button className="btn btn-sm" style={{ width: 36 }} onClick={() => bump(c.name, -1)}>−</button>}
+                                {n > 0 && <span className="mono" style={{ width: 20, textAlign: 'center', fontWeight: 700 }}>{n}</span>}
+                                <button className="btn btn-sm" style={{ width: 36 }} onClick={() => bump(c.name, +1)}>+</button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })
+                })()}
                 <textarea className="field" style={{ height: 90, padding: '10px 12px', resize: 'vertical' }}
                   value={f.note} onChange={e => set('note', e.target.value)}
                   placeholder="פרטים נוספים — גדלים, צבעים, שעות הקמה, כל מה שחשוב…" />
@@ -305,6 +334,7 @@ export default function ClientPortal({ token }) {
 
               {msg && <div style={{ color: '#E5735B', fontSize: 13, fontWeight: 600 }}>{msg}</div>}
 
+              <div style={{ height: 8 }} />
               <div className="row gap-2">
                 <button className="btn grow" onClick={() => { setView('list'); setMsg('') }}>ביטול</button>
                 <button className="btn btn-solid grow" style={{ height: 48 }} disabled={busy} onClick={submit}>
@@ -319,6 +349,26 @@ export default function ClientPortal({ token }) {
           ההזמנה אינה נסגרת מיד — שי יחזור אליך עם הצעת מחיר לאישור.
         </div>
       </div>
+
+      {/* פס סיכום דביק — תמיד רואים כמה נבחר ואיך שולחים */}
+      {view === 'new' && (
+        <div className="row between gap-3" style={{
+          position: 'fixed', insetInline: 0, bottom: 0, zIndex: 30,
+          background: 'color-mix(in srgb, var(--card) 95%, transparent)',
+          backdropFilter: 'blur(10px)', borderTop: '1px solid var(--line)',
+          padding: '10px 16px calc(10px + env(safe-area-inset-bottom))',
+          boxShadow: '0 -12px 28px -18px rgba(0,0,0,.8)',
+        }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>
+              {pickedCount === 0 ? 'לא נבחרו פריטים' : `${pickedCount} פריטים נבחרו`}
+            </div>
+            <div className="t-meta truncate">{f.title || 'ללא שם אירוע'}</div>
+          </div>
+          <button className="btn btn-solid" style={{ height: 44, flex: '0 0 auto' }}
+            disabled={busy} onClick={submit}>{busy ? 'שולח…' : 'שליחת ההזמנה'}</button>
+        </div>
+      )}
     </div>
   )
 }
