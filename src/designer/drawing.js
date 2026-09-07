@@ -95,7 +95,9 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
     ctx.textBaseline = o.base || 'alphabetic'
     ctx.direction = o.ltr ? 'ltr' : 'rtl'
     ctx.fillStyle = o.color || INK
-    ctx.fillText(o.ltr ? String(s) : bidi(s), x, y)
+    const str = o.ltr ? String(s) : bidi(s)
+    if (o.max) ctx.fillText(str, x, y, o.max)   // הקנבס דוחס לרוחב שנתון
+    else ctx.fillText(str, x, y)
   }
   const num = (s, x, y, o = {}) => txt(s, x, y, { ...o, ltr: true, align: o.align || 'center' })
 
@@ -255,7 +257,7 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
   groups.forEach(g => {
     if (ry + rowH > T.y + T.h - 26) return
     num(g.no, colX[0].l + colX[0].w / 2, ry + 4.2, { size: 3 })
-    txt(g.mat, colX[1].r - 1.5, ry + 4.2, { size: 2.9 })
+    txt(g.mat, colX[1].r - 1.5, ry + 4.2, { size: 2.9, max: colX[1].w - 3 })
     num(g.len, colX[2].l + colX[2].w / 2, ry + 4.2, { size: 3 })
     num(g.qty, colX[3].l + colX[3].w / 2, ry + 4.2, { size: 3, bold: true })
     ry += rowH
@@ -268,7 +270,7 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
   txt('לקנייה', T.x + T.w - 2, sumY + 4.5, { size: 3, bold: true })
   let sy2 = sumY + 9
   plans.slice(0, 4).forEach(p => {
-    txt(`${p.mat}`, T.x + T.w - 2, sy2, { size: 2.7 })
+    txt(`${p.mat}`, T.x + T.w - 2, sy2, { size: 2.7, max: T.w * 0.5 })
     txt(`${p.barCount}×${p.stock} ס״מ · פחת ${p.wastePct}%`, T.x + 2, sy2, { size: 2.7, align: 'left' })
     sy2 += 4.2
     // חלק ארוך מהקורה לא נספר בכמות — בלי אזהרה הנגר יקנה חסר
@@ -285,7 +287,7 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
   const cell = (x, w, label, value, big) => {
     line(x, TB.y, x, TB.y + TB.h, MED)
     txt(label, x + w - 2, TB.y + 5.5, { size: 2.5, color: '#666' })
-    txt(value, x + w - 2, TB.y + (big ? 15 : 13), { size: big ? 6 : 4, bold: true })
+    txt(value, x + w - 2, TB.y + (big ? 15 : 13), { size: big ? 6 : 4, bold: true, max: w - 4 })
   }
   const d = new Date()
   const today = `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`
