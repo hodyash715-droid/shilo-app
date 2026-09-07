@@ -103,7 +103,11 @@ function Hero({ name, jobs }) {
       <div style={{ position: 'relative' }}>
         <div className="t-h1">{greeting()}, {name}.</div>
         <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
-          <b style={{ color: 'var(--gold)' }}>{approval}</b> לאישור · <b style={{ color: 'var(--gold)' }}>{team}</b> לשיבוץ · <b style={{ color: overdue ? '#E5735B' : 'var(--ink70)' }}>{overdue}</b> באיחור
+          {jobs.length === 0
+            ? 'הלוח שלך ריק. כל עבודה שתוסיף תופיע כאן.'
+            : <>
+                <b style={{ color: 'var(--gold)' }}>{approval}</b> לאישור · <b style={{ color: 'var(--gold)' }}>{team}</b> לשיבוץ · <b style={{ color: overdue ? '#E5735B' : 'var(--ink70)' }}>{overdue}</b> באיחור
+              </>}
         </div>
       </div>
     </div>
@@ -203,7 +207,16 @@ export default function Home({ jobs, name, onOpen, onStatus, onEdit, shifts, emp
         <span className="t-meta">{inbox.length} פתוחים</span>
       </div>
 
-      {inbox.length === 0 ? (
+      {jobs.length === 0 ? (
+        <div className="card" style={{ padding: 30, textAlign: 'center', marginBottom: 26 }}>
+          <div style={{ fontSize: 30, marginBottom: 8 }}>✦</div>
+          <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 6 }}>מתחילים</div>
+          <div className="muted" style={{ fontSize: 13.5, lineHeight: 1.8, maxWidth: 340, margin: '0 auto' }}>
+            הוסף את העבודה הראשונה בכפתור <b style={{ color: 'var(--gold)' }}>＋ עבודה חדשה</b> למעלה.
+            <br />אחר כך — <b>צוות</b> להוספת האנשים שלך, ו<b>הגדרות</b> לקישור למפיקות.
+          </div>
+        </div>
+      ) : inbox.length === 0 ? (
         <div className="card" style={{ padding: 28, textAlign: 'center', marginBottom: 26 }}>
           <div style={{ fontWeight: 600, marginBottom: 2 }}>הכל תחת שליטה 🎯</div>
           <div className="muted" style={{ fontSize: 13 }}>אין כרגע עבודות שדורשות פעולה מיידית.</div>
