@@ -158,7 +158,7 @@ export default function ClientPortal({ token }) {
 
         {view === 'list' ? (
           <>
-            <button className="btn btn-solid" style={{ width: '100%', height: 50, marginBottom: 18, fontSize: 16 }}
+            <button className="btn btn-solid" style={{ width: '100%', height: 46, marginBottom: 18, fontSize: 15, letterSpacing: '.02em' }}
               onClick={() => { setView('new'); setMsg('') }}>
               <span style={{ fontSize: 20, marginTop: -2 }}>＋</span> הזמנה חדשה
             </button>
@@ -364,7 +364,7 @@ export default function ClientPortal({ token }) {
                     return (
                       <div key={cat} style={{ marginBottom: 10 }}>
                         <div className="row between" style={{ margin: '0 0 6px' }}>
-                          <span style={{ fontWeight: 700, fontSize: 13.5 }}>{CATEGORIES[cat] || 'אחר'}</span>
+                          <span className="serif" style={{ fontWeight: 600, fontSize: 16 }}>{CATEGORIES[cat] || 'אחר'}</span>
                           {inGroup > 0 && <span className="chip chip-go">{inGroup} נבחרו</span>}
                         </div>
                         <div className="card" style={{ overflow: 'hidden' }}>
