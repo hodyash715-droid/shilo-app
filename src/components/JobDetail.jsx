@@ -139,12 +139,17 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
                       </div>
                       <div className="row gap-2 wrap" style={{ marginBottom: 10 }}>
                         {wa && <button className="btn btn-sm" style={{ color: '#55C07E' }}
-                          onClick={() => sendVia(wa)}>📱 וואטסאפ</button>}
+                          disabled={!total} onClick={() => sendVia(wa)}>📱 וואטסאפ</button>}
                         {mail && <button className="btn btn-sm"
-                          onClick={() => sendVia(mail)}>✉️ מייל</button>}
+                          disabled={!total} onClick={() => sendVia(mail)}>✉️ מייל</button>}
                         {pending && <button className="btn btn-sm"
-                          onClick={() => sendVia(null)}>📞 נמסר טלפונית</button>}
+                          disabled={!total} onClick={() => sendVia(null)}>📞 נמסר טלפונית</button>}
                       </div>
+                      {!total && (
+                        <div className="t-meta" style={{ marginBottom: 10, color: '#D9822B' }}>
+                          אין עדיין סכום — הוסף פריטים ומחירים בעריכת העבודה לפני שליחת ההצעה.
+                        </div>
+                      )}
                       {!producer && (
                         <div className="t-meta" style={{ marginBottom: 10, color: '#D9822B' }}>
                           העבודה לא משויכת למפיקה — ההודעה תישלח בלי קישור לאישור.
