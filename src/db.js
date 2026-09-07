@@ -3,6 +3,7 @@ import { supabase } from './supabase.js'
 // המרה בין שורת DB (snake_case) לצורת האפליקציה (camelCase)
 const fromRow = r => ({
   id: r.id,
+  createdAt: r.created_at,
   title: r.title || '',
   client: r.client || '',
   contact: r.contact || '',

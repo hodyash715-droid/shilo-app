@@ -1,19 +1,27 @@
 import React, { useState } from 'react'
 import { createClientRec, deleteClientRec } from '../db.js'
-import { waLink } from '../data.js'
+import { waLink, portalLink, quoteOpen, relLabel, isoLocal } from '../data.js'
 
 const rndToken = () => Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6)
 
-export const portalLink = (token) =>
-  `${window.location.origin}${window.location.pathname}#/c/${token}`
-
-export default function ClientList({ clients, onSaved, onDeleted }) {
+export default function ClientList({ clients = [], onSaved, onDeleted, jobs = [] }) {
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ name: '', company: '', phone: '', email: '' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [copied, setCopied] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
+
+  // מה קורה עם כל מפיקה — כמה שלחה, מתי, וכמה פתוחות
+  const stats = (c) => {
+    const mine = jobs.filter(j => j.clientId === c.id)
+    const last = mine.map(j => j.createdAt).filter(Boolean).sort().pop()
+    return {
+      total: mine.length,
+      open: mine.filter(quoteOpen).length,
+      lastLabel: last ? relLabel(isoLocal(new Date(last))) : '—',
+    }
+  }
 
   const add = async () => {
     if (!f.name.trim()) { setErr('צריך שם'); return }
@@ -67,19 +75,41 @@ export default function ClientList({ clients, onSaved, onDeleted }) {
                 <div className="row between gap-2">
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 15 }} className="truncate">{c.name}</div>
-                    <div className="t-meta truncate">{c.company || '—'}{c.phone ? ` · ${c.phone}` : ''}{c.email ? ` · ${c.email}` : ''}</div>
+                    <div className="t-meta truncate">{c.company || '—'}{c.phone ? ` · ${c.phone}` : ''}</div>
+                    {c.email && <div className="t-meta truncate" dir="ltr" style={{ textAlign: 'start' }}>{c.email}</div>}
                   </div>
-                  <button className="btn btn-ghost btn-sm" style={{ color: '#E5735B', flex: 'none' }}
-                    onClick={() => { if (confirmDel === c.id) { deleteClientRec(c.id).then(() => onDeleted(c.id)) } else setConfirmDel(c.id) }}>
-                    {confirmDel === c.id ? 'בטוח?' : '✕'}
-                  </button>
+                  <div className="row gap-2" style={{ flex: 'none' }}>
+                    {stats(c).open > 0 && <span className="chip chip-signal">{stats(c).open} פתוחות</span>}
+                  </div>
                 </div>
+
+                {/* מה קורה איתה */}
+                <div className="row gap-2 wrap" style={{ marginTop: 7 }}>
+                  <span className="t-meta">
+                    {stats(c).total === 0 ? 'עוד לא שלחה הזמנות'
+                      : `${stats(c).total} הזמנות · אחרונה ${stats(c).lastLabel}`}
+                  </span>
+                </div>
+
                 <div className="row gap-2 wrap" style={{ marginTop: 9 }}>
                   <button className="btn btn-sm" onClick={() => copy(c)}>
                     {copied === c.id ? 'הועתק ✓' : 'העתק קישור'}
                   </button>
                   {wa && <a className="btn btn-sm" href={wa} target="_blank" rel="noreferrer"
                     style={{ textDecoration: 'none', color: '#55C07E' }}>שלח בוואטסאפ</a>}
+                  <div className="grow" />
+                  {confirmDel === c.id ? (
+                    <>
+                      <button className="btn btn-sm" onClick={() => setConfirmDel(null)}>ביטול</button>
+                      <button className="btn btn-sm" style={{ color: '#fff', background: '#B23A2A', borderColor: '#B23A2A' }}
+                        onClick={() => deleteClientRec(c.id).then(() => onDeleted(c.id))}>
+                        {stats(c).total > 0 ? `מחק ו-${stats(c).total} הזמנות יישארו` : 'מחק סופית'}
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--ink45)' }}
+                      onClick={() => setConfirmDel(c.id)}>הסר</button>
+                  )}
                 </div>
               </div>
             )

@@ -399,7 +399,8 @@ export default function App() {
             {view === 'settings' && <Settings name={displayName(session.user?.email)}
               email={session.user?.email} onSignOut={() => supabase.auth.signOut()}
               employees={employees} onEmpSaved={onEmpSaved} onEmpDeleted={onEmpDeleted}
-              clients={clients} onClientSaved={onClientSaved} onClientDeleted={onClientDeleted} />}
+              clients={clients} onClientSaved={onClientSaved} onClientDeleted={onClientDeleted}
+              jobs={jobs} />}
           </div>}
 
       {openJob && (
