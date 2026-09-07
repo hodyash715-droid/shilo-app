@@ -83,3 +83,26 @@ update public.employees
 update public.employees
    set join_code = null, join_expires_at = null
  where user_id is not null;
+
+-- ============================================================
+-- נעילת הרשאות ריצה.
+-- Postgres מעניק EXECUTE ל-PUBLIC אוטומטית בכל create function,
+-- ולכן claim_employee_code היה פתוח גם ל-anon: אפשר היה לבדוק
+-- קוד הצטרפות בלי חשבון בכלל ולקבל תשובה חד-משמעית.
+-- ============================================================
+
+revoke execute on function public.claim_employee_code(text) from public, anon;
+revoke execute on function public.my_job_titles()           from public, anon;
+revoke execute on function public.gen_join_code()           from public, anon;
+revoke execute on function public.is_manager()              from public, anon;
+revoke execute on function public.my_employee_id()          from public, anon;
+
+grant execute on function public.claim_employee_code(text) to authenticated;
+grant execute on function public.my_job_titles()           to authenticated;
+
+-- הפונקציות של דף הלקוח נשארות פתוחות ל-anon בכוונה:
+-- המפיקה אינה מחוברת, וההגנה היא הטוקן שנבדק בתוכן.
+grant execute on function public.client_portal(text)                          to anon, authenticated;
+grant execute on function public.client_submit_order(text,text,date,text,text,text,text,jsonb) to anon, authenticated;
+grant execute on function public.client_decide_quote(text,uuid,boolean,text)  to anon, authenticated;
+grant execute on function public.client_post_message(text,uuid,text,text)     to anon, authenticated;
