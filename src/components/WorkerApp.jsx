@@ -2,10 +2,12 @@ import React, { useState } from 'react'
 import { TODAY, isoLocal, fmtDate, relLabel, availById, availLabel, shiftKindLabel, daysUntil, placeOf, wazeLink } from '../data.js'
 import { EmpAvatar } from './ui.jsx'
 import AvailPicker from './AvailPicker.jsx'
+import Bell from './Bell.jsx'
+import NotifOptIn from './NotifOptIn.jsx'
 
 const DAYS_AHEAD = 28
 
-export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, onSignOut }) {
+export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, onSignOut, notifs = [], onNotifRead, onNotifReadAll }) {
   const [tab, setTab] = useState('avail')
   const [picker, setPicker] = useState(null)
 
@@ -46,9 +48,12 @@ export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, 
               <div className="t-meta truncate">{me.role || 'צוות שילה'}</div>
             </div>
           </div>
+          <div className="row gap-2" style={{ flex: '0 0 auto' }}>
+          <Bell items={notifs} onRead={onNotifRead} onReadAll={onNotifReadAll} />
           <button className="btn btn-ghost btn-sm" onClick={onSignOut} aria-label="יציאה">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
           </button>
+          </div>
         </div>
       </header>
 
@@ -57,6 +62,8 @@ export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, 
           {segBtn('avail', 'הזמינות שלי')}
           {segBtn('shifts', 'המשמרות שלי', myShifts.length)}
         </div>
+
+        <NotifOptIn hideWhenSettled />
 
         {tab === 'avail' ? (
           <>

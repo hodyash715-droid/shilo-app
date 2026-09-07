@@ -1,5 +1,6 @@
 import React from 'react'
 import { VERSION } from '../version.js'
+import NotifOptIn from './NotifOptIn.jsx'
 import EmployeeList from './EmployeeList.jsx'
 import ClientList from './ClientList.jsx'
 
@@ -28,6 +29,8 @@ export default function Settings({ name, email, onSignOut, employees, onEmpSaved
         <Row label="חשבון" value="צוות שילה" />
         <Row label="גרסה" value={<span className="mono">{VERSION}</span>} />
       </div>
+
+      <NotifOptIn />
 
       <div className="row gap-2" style={{ margin: '4px 0 12px' }}>
         <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />

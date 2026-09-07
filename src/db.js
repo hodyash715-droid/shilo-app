@@ -314,3 +314,25 @@ export async function clearAvailability(employee_id, date) {
     .eq('employee_id', employee_id).eq('date', date)
   if (error) throw error
 }
+
+// ---------- מרכז התראות ----------
+// המנהל מקבל את התראות העסק; העובד מקבל את שלו דרך RLS.
+export async function fetchNotifications(isManager) {
+  let q = supabase.from('notifications').select('*')
+    .order('created_at', { ascending: false }).limit(50)
+  if (isManager) q = q.eq('audience', 'manager')
+  const { data, error } = await q
+  if (error) throw error
+  return data
+}
+
+export async function markNotifRead(id) {
+  const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', id)
+  if (error) throw error
+}
+
+export async function markAllNotifsRead(ids) {
+  if (!ids.length) return
+  const { error } = await supabase.from('notifications').update({ is_read: true }).in('id', ids)
+  if (error) throw error
+}

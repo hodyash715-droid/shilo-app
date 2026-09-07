@@ -1,7 +1,8 @@
 import React from 'react'
 import { TABS } from '../nav.jsx'
+import Bell from './Bell.jsx'
 
-export default function Header({ view, setView, onNew, email, onSignOut }) {
+export default function Header({ view, setView, onNew, email, onSignOut, notifs = [], onNotifOpen, onNotifRead, onNotifReadAll }) {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 20,
@@ -32,6 +33,7 @@ export default function Header({ view, setView, onNew, email, onSignOut }) {
         </nav>
 
         <div className="row gap-2">
+          <Bell items={notifs} onOpen={onNotifOpen} onRead={onNotifRead} onReadAll={onNotifReadAll} />
           <button className="btn btn-solid" onClick={onNew}>
             <span style={{ fontSize: 18, marginTop: -2 }}>＋</span>
             <span className="hide-sm">עבודה חדשה</span>

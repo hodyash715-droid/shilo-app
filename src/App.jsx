@@ -5,6 +5,7 @@ import {
   fetchAvailability, setAvailability as saveAvailability, clearAvailability,
   claimEmployeeCode, fetchMyJobTitles, fetchClients,
   fetchKoolisot, saveKoolisa, deleteKoolisa,
+  fetchNotifications, markNotifRead, markAllNotifsRead,
 } from './db.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
@@ -102,6 +103,8 @@ export default function App() {
   const [clients, setClients] = useState([])
   const [koolisot, setKoolisot] = useState([])
   const [designTarget, setDesignTarget] = useState(null)  // {jobId, koolisaId}
+  const [notifs, setNotifs] = useState([])
+  const seenRef = useRef(new Set())   // מה כבר הוקפץ כהתראת דפדפן
   const [loading, setLoading] = useState(false)
   const [dataReady, setDataReady] = useState(false)
   const [loadErr, setLoadErr] = useState('')
@@ -172,6 +175,45 @@ export default function App() {
     })()
     return () => { cancelled = true }
   }, [session, dataReady, employees])
+
+  // ---- מרכז התראות ----
+  const isManagerNow = MANAGERS.includes((session?.user?.email || '').toLowerCase())
+
+  const loadNotifs = async (announce) => {
+    try {
+      const rows = await fetchNotifications(isManagerNow)
+      setNotifs(rows)
+      // התראת דפדפן על מה שחדש מאז הפעם הקודמת (רק כשהאפליקציה פתוחה)
+      if (announce && 'Notification' in window && Notification.permission === 'granted') {
+        rows.filter(n => !n.is_read && !seenRef.current.has(n.id)).slice(0, 3).forEach(n => {
+          try { new Notification(n.title, { body: n.body || '', icon: './icon-192.png', tag: n.id }) } catch {}
+        })
+      }
+      rows.forEach(n => seenRef.current.add(n.id))
+    } catch (e) { /* הטבלה אולי עוד לא נוצרה */ }
+  }
+
+  useEffect(() => {
+    if (!session || !dataReady) return
+    loadNotifs(false)
+    const t = setInterval(() => loadNotifs(true), 45000)
+    const onFocus = () => loadNotifs(true)
+    window.addEventListener('focus', onFocus)
+    return () => { clearInterval(t); window.removeEventListener('focus', onFocus) }
+  }, [session, dataReady, employees])
+
+  const onNotifRead = async (n) => {
+    if (n.is_read) return
+    setNotifs(xs => xs.map(x => x.id === n.id ? { ...x, is_read: true } : x))
+    try { await markNotifRead(n.id) } catch (e) { loadNotifs(false) }
+  }
+  const onNotifReadAll = async (ids) => {
+    setNotifs(xs => xs.map(x => ids.includes(x.id) ? { ...x, is_read: true } : x))
+    try { await markAllNotifsRead(ids) } catch (e) { loadNotifs(false) }
+  }
+  const onNotifOpen = (jobId) => {
+    if (jobs.some(j => j.id === jobId)) { setView('home'); setOpenId(jobId) }
+  }
 
   const openJob = jobs.find(j => j.id === openId) || null
 
@@ -295,7 +337,8 @@ export default function App() {
     return (
       <>
         <WorkerApp me={me} jobs={jobs} shifts={shifts} availability={availability}
-          onSetAvail={onSetAvail} onSignOut={() => supabase.auth.signOut()} />
+          onSetAvail={onSetAvail} onSignOut={() => supabase.auth.signOut()}
+          notifs={notifs} onNotifRead={onNotifRead} onNotifReadAll={onNotifReadAll} />
         <VersionBadge />
         {toast && <Toast text={toast} />}
       </>
@@ -310,6 +353,8 @@ export default function App() {
         onNew={() => setEditTarget(null)}
         email={session.user?.email}
         onSignOut={() => supabase.auth.signOut()}
+        notifs={notifs}
+        onNotifOpen={onNotifOpen} onNotifRead={onNotifRead} onNotifReadAll={onNotifReadAll}
       />
 
       {loadErr && (
