@@ -12,6 +12,20 @@ const AT = { none: 0, needs_quote: 1, sent: 2, approved: 3, rejected: 1 }
 
 export default function OrderProgress({ status }) {
   const at = AT[status] ?? 0
+
+  // סגור וגמור — ציר מלא הוא רעש
+  if (status === 'approved') {
+    return (
+      <div className="row gap-2" style={{
+        margin: '12px 0 4px', padding: '7px 10px', borderRadius: 8,
+        background: 'var(--go-bg)', border: '1px solid var(--go)',
+      }}>
+        <span style={{ color: 'var(--go-fg)', fontWeight: 700, fontSize: 13 }}>✓ ההזמנה אושרה</span>
+        <span className="t-meta">שי בהפקה</span>
+      </div>
+    )
+  }
+
   const rejected = status === 'rejected'
   const tone = rejected ? '#E5735B' : 'var(--gold)'
 

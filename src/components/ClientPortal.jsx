@@ -64,6 +64,7 @@ export default function ClientPortal({ token }) {
       setFilesBy(m => ({ ...m, [jobId]: rows }))
     } catch {}
   }
+  const [openFiles, setOpenFiles] = useState(null)
   const [openThread, setOpenThread] = useState(null)   // id של הזמנה שהשיחה שלה פתוחה
   const [rejecting, setRejecting] = useState(null)     // id של הזמנה שנדחית
   const [reason, setReason] = useState('')
@@ -118,10 +119,18 @@ export default function ClientPortal({ token }) {
               <div className="t-meta truncate">{client.company}</div>
             </div>
             {BUSINESS.phone && (
-              <a className="btn btn-sm" title="וואטסאפ לשי" aria-label="וואטסאפ לשי"
-                style={{ flex: '0 0 auto', color: '#55C07E', textDecoration: 'none' }}
+              <a className="btn btn-sm" aria-label="וואטסאפ לשי"
+                style={{
+                  flex: '0 0 auto', color: '#55C07E', textDecoration: 'none',
+                  borderColor: 'rgba(85,192,126,.35)', gap: 5,
+                }}
                 href={waLink(BUSINESS.phone, `היי שי, זו ${client.name}.`)}
-                target="_blank" rel="noreferrer">💬</a>
+                target="_blank" rel="noreferrer">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2m0 2a8 8 0 1 1-4.1 14.9l-.3-.2-2.6.7.7-2.5-.2-.3A8 8 0 0 1 12 4m-3.4 4c-.2 0-.5.1-.7.4-.2.3-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.6 4 3.5 2 .8 2.4.6 2.8.6.4 0 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1l-.6-.3s-1.2-.6-1.4-.7c-.2-.1-.4-.1-.5.1l-.7.9c-.1.2-.3.2-.5.1-.2-.1-1-.4-1.9-1.2-.7-.6-1.2-1.4-1.3-1.6-.1-.2 0-.4.1-.5l.4-.5.3-.5v-.4l-.7-1.7c-.2-.4-.4-.4-.5-.4z"/>
+                </svg>
+                שי
+              </a>
             )}
           </div>
         </div>
@@ -175,12 +184,14 @@ export default function ClientPortal({ token }) {
                       </div>
                       <div style={{ fontWeight: 700, fontSize: 17, marginTop: 3 }}>{o.title}</div>
                       {(o.venue || o.address) && (
-                        <div className="row between gap-2" style={{ marginTop: 4 }}>
-                          <span className="t-meta truncate">📍 {o.venue || o.address}</span>
-                          <a className="t-meta" style={{ flex: '0 0 auto', color: 'var(--gold-fg)' }}
-                            href={wazeLink(placeOf({ venue: o.venue, address: o.address }))}
-                            target="_blank" rel="noreferrer">ניווט</a>
-                        </div>
+                        <a className="row gap-1" style={{
+                          marginTop: 4, color: 'var(--ink70)', textDecoration: 'none', fontSize: 12.5,
+                        }} href={wazeLink(placeOf({ venue: o.venue, address: o.address }))}
+                          target="_blank" rel="noreferrer">
+                          <span style={{ flex: '0 0 auto' }}>📍</span>
+                          <span className="truncate">{o.venue || o.address}</span>
+                          <span style={{ flex: '0 0 auto', color: 'var(--gold-fg)' }}>· ניווט</span>
+                        </a>
                       )}
 
                       <OrderProgress status={o.quote_status} />
@@ -211,9 +222,14 @@ export default function ClientPortal({ token }) {
                       )}
 
                       {(o.quote_status === 'sent' || o.quote_status === 'approved') && (
-                        <div className="row between" style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--hair)' }}>
-                          <span style={{ fontWeight: 700 }}>סה״כ הצעה</span>
-                          <span className="mono" style={{ fontSize: 19, fontWeight: 700 }}>{ils(o.total)}</span>
+                        <div className="row between" style={{
+                          marginTop: 10, padding: '9px 11px', borderRadius: 9,
+                          background: 'var(--card-2)', border: '1px solid var(--line)',
+                        }}>
+                          <span style={{ fontWeight: 700, fontSize: 14 }}>סה״כ הצעה</span>
+                          <span className="mono" style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-.02em' }}>
+                            {ils(o.total)}
+                          </span>
                         </div>
                       )}
 
@@ -243,7 +259,7 @@ export default function ClientPortal({ token }) {
                       )}
 
                       {/* קבצים */}
-                      {filesEnabled() && (
+                      {filesEnabled() && (openFiles === o.id || (filesBy[o.id]?.length > 0)) && (
                         <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hair)' }}>
                           <div className="t-meta" style={{ marginBottom: 6 }}>קבצים ומיתוג</div>
                           <FileList
@@ -258,6 +274,18 @@ export default function ClientPortal({ token }) {
 
                       {/* שיחה ובקשת שינוי */}
                       <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hair)' }}>
+                        {openThread !== o.id && (
+                          <div className="row gap-2">
+                            {filesEnabled() && !(filesBy[o.id]?.length) && (
+                              <button className="btn btn-sm grow" onClick={() => setOpenFiles(o.id)}>📎 קבצים</button>
+                            )}
+                            <button className="btn btn-sm grow" onClick={() => setOpenThread(o.id)}>
+                              {o.messages?.length
+                                ? `💬 שיחה (${o.messages.length})`
+                                : (o.quote_status === 'approved' ? '✏️ בקשת שינוי' : '💬 שאלה לשי')}
+                            </button>
+                          </div>
+                        )}
                         {openThread === o.id ? (
                           <>
                             <div className="row between" style={{ marginBottom: 8 }}>
@@ -279,14 +307,7 @@ export default function ClientPortal({ token }) {
                               </div>
                             )}
                           </>
-                        ) : (
-                          <button className="btn btn-sm" style={{ width: '100%' }}
-                            onClick={() => setOpenThread(o.id)}>
-                            {o.messages?.length
-                              ? `💬 שיחה (${o.messages.length})`
-                              : (o.quote_status === 'approved' ? '✏️ בקשת שינוי' : '💬 שאלה לשי')}
-                          </button>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   )
@@ -382,7 +403,9 @@ export default function ClientPortal({ token }) {
         )}
 
         <div className="t-meta" style={{ textAlign: 'center', marginTop: 26, lineHeight: 1.7 }}>
-          ההזמנה אינה נסגרת מיד — שי יחזור אליך עם הצעת מחיר לאישור.
+          {view === 'new' || orders.some(o => ['none', 'needs_quote'].includes(o.quote_status))
+            ? 'הזמנה אינה נסגרת מיד — שי יחזור אליך עם הצעת מחיר לאישור.'
+            : 'צריכה משהו? אפשר לפתוח שיחה בכל הזמנה, או לכתוב לשי בוואטסאפ.'}
         </div>
       </div>
 
