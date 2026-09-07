@@ -30,7 +30,7 @@ export default function Settings({ name, email, onSignOut, employees, onEmpSaved
         <Row label="גרסה" value={<span className="mono">{VERSION}</span>} />
       </div>
 
-      <NotifOptIn />
+      <NotifOptIn isManager />
 
       <div className="row gap-2" style={{ margin: '4px 0 12px' }}>
         <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />

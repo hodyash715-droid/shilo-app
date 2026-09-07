@@ -63,7 +63,7 @@ export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, 
           {segBtn('shifts', 'המשמרות שלי', myShifts.length)}
         </div>
 
-        <NotifOptIn hideWhenSettled />
+        <NotifOptIn hideWhenSettled employeeId={me.id} />
 
         {tab === 'avail' ? (
           <>

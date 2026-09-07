@@ -186,7 +186,7 @@ export default function App() {
       // התראת דפדפן על מה שחדש מאז הפעם הקודמת (רק כשהאפליקציה פתוחה)
       if (announce && 'Notification' in window && Notification.permission === 'granted') {
         rows.filter(n => !n.is_read && !seenRef.current.has(n.id)).slice(0, 3).forEach(n => {
-          try { new Notification(n.title, { body: n.body || '', icon: './icon-192.png', tag: n.id }) } catch {}
+          try { new Notification(n.title, { body: n.body || '', icon: './icons/icon-192.png', tag: n.id }) } catch {}
         })
       }
       rows.forEach(n => seenRef.current.add(n.id))
