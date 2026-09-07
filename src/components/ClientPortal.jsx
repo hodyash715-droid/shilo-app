@@ -7,11 +7,11 @@ import { filesEnabled, listClientFiles, uploadClientFile, deleteClientFile } fro
 import { fmtDate, relLabel, ils, CATEGORIES, shortTime, placeOf, wazeLink, waLink, BUSINESS } from '../data.js'
 
 const QSTATE = {
-  needs_quote: { label: 'ממתין להצעת מחיר', color: '#EEC421' },
-  sent:        { label: 'הצעת מחיר ממתינה לאישורך', color: '#D9822B' },
-  approved:    { label: 'אושר', color: '#3E9C68' },
-  rejected:    { label: 'נדחתה', color: '#A8382A' },
-  none:        { label: 'בטיפול', color: '#8A8474' },
+  needs_quote: { label: 'ממתין להצעת מחיר', color: 'var(--gold-fg)' },
+  sent:        { label: 'הצעת מחיר ממתינה לאישורך', color: 'var(--warn-fg)' },
+  approved:    { label: 'אושר', color: 'var(--go-fg)' },
+  rejected:    { label: 'נדחתה', color: 'var(--danger)' },
+  none:        { label: 'בטיפול', color: 'var(--ink45)' },
 }
 
 export default function ClientPortal({ token }) {
@@ -24,6 +24,12 @@ export default function ClientPortal({ token }) {
     try { setData(await clientPortal(token)) }
     catch (e) { setData(null) }
   }
+  // ערכת העיצוב של דף המפיקות חלה על כל המסמך, ויורדת ביציאה
+  useEffect(() => {
+    document.documentElement.classList.add('portal')
+    return () => document.documentElement.classList.remove('portal')
+  }, [])
+
   useEffect(() => { load() }, [token])
   useEffect(() => {
     if (!filesEnabled() || !data?.orders) return
@@ -108,7 +114,7 @@ export default function ClientPortal({ token }) {
           <div className="row gap-3" style={{ minWidth: 0 }}>
             <span className="brand-mark">ש</span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.1 }}>שילה</div>
+              <div className="serif" style={{ fontWeight: 600, fontSize: 21, lineHeight: 1.05, letterSpacing: '.01em' }}>שילה</div>
               <div className="t-meta truncate">עיצוב ומיתוג לאירועים</div>
             </div>
           </div>
@@ -120,8 +126,8 @@ export default function ClientPortal({ token }) {
             {BUSINESS.phone && (
               <a className="btn btn-sm" aria-label="וואטסאפ לשי"
                 style={{
-                  flex: '0 0 auto', color: '#55C07E', textDecoration: 'none',
-                  borderColor: 'rgba(85,192,126,.35)', gap: 5,
+                  flex: '0 0 auto', color: 'var(--wa)', textDecoration: 'none',
+                  borderColor: 'var(--wa)', gap: 5,
                 }}
                 href={waLink(BUSINESS.phone, `היי שי, זו ${client.name}.`)}
                 target="_blank" rel="noreferrer">
@@ -138,8 +144,8 @@ export default function ClientPortal({ token }) {
       <div style={{ maxWidth: 620, margin: '0 auto', padding: 16 }}>
         {/* התראה: הצעה ממתינה לאישור */}
         {awaiting.length > 0 && view === 'list' && (
-          <div className="card" style={{ padding: 14, marginBottom: 16, border: '1px solid #D9822B', background: 'rgba(217,130,43,.10)' }}>
-            <div style={{ fontWeight: 700, color: '#E0954A' }}>
+          <div className="card" style={{ padding: 14, marginBottom: 16, border: '1px solid var(--warn)', background: 'var(--gold-bg)' }}>
+            <div style={{ fontWeight: 700, color: 'var(--warn-fg)' }}>
               {awaiting.length === 1 ? 'הצעת מחיר ממתינה לאישורך' : `${awaiting.length} הצעות מחיר ממתינות לאישורך`}
             </div>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>גללי למטה כדי לאשר או לדחות.</div>
@@ -158,8 +164,8 @@ export default function ClientPortal({ token }) {
             </button>
 
             <div className="row gap-2" style={{ marginBottom: 10 }}>
-              <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />
-              <span style={{ fontWeight: 700, fontSize: 16 }}>ההזמנות שלי</span>
+              <span style={{ width: 22, height: 1, background: 'var(--gold)' }} />
+              <span className="serif" style={{ fontWeight: 600, fontSize: 19 }}>ההזמנות שלי</span>
               <span className="t-meta">{orders.length}</span>
             </div>
 
@@ -173,7 +179,7 @@ export default function ClientPortal({ token }) {
                 {orders.map(o => {
                   const q = QSTATE[o.quote_status] || QSTATE.none
                   return (
-                    <div key={o.id} className="card" style={{ padding: 14, borderColor: o.quote_status === 'sent' ? '#D9822B' : undefined }}>
+                    <div key={o.id} className="card" style={{ padding: 14, borderColor: o.quote_status === 'sent' ? 'var(--warn)' : undefined }}>
                       <div className="row between gap-2">
                         <span className="mono t-meta">{o.order_no ? `#${o.order_no}` : ''}</span>
                         <span className="t-meta">
@@ -181,7 +187,7 @@ export default function ClientPortal({ token }) {
                           {o.event_time ? ` · ${shortTime(o.event_time)}` : ''}
                         </span>
                       </div>
-                      <div style={{ fontWeight: 700, fontSize: 17, marginTop: 3 }}>{o.title}</div>
+                      <div className="serif" style={{ fontWeight: 600, fontSize: 20, marginTop: 4, lineHeight: 1.2 }}>{o.title}</div>
                       {(o.venue || o.address) && (
                         <a className="row gap-1" style={{
                           marginTop: 4, color: 'var(--ink70)', textDecoration: 'none', fontSize: 12.5,
@@ -236,7 +242,7 @@ export default function ClientPortal({ token }) {
                         <div className="row gap-2" style={{ marginTop: 12 }}>
                           <button className="btn btn-solid grow" style={{ height: 46 }} disabled={busy}
                             onClick={() => decide(o.id, true)}>אישור ההצעה ✓</button>
-                          <button className="btn" style={{ height: 46, color: '#E5735B' }} disabled={busy}
+                          <button className="btn" style={{ height: 46, color: 'var(--danger)' }} disabled={busy}
                             onClick={() => { setRejecting(o.id); setReason('') }}>לא מתאים</button>
                         </div>
                       )}
@@ -318,8 +324,8 @@ export default function ClientPortal({ token }) {
           /* ---------- טופס הזמנה ---------- */
           <>
             <div className="row between gap-2" style={{ marginBottom: 12 }}>
-              <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />
-              <span style={{ fontWeight: 700, fontSize: 16 }}>הזמנה חדשה</span>
+              <span style={{ width: 22, height: 1, background: 'var(--gold)' }} />
+              <span className="serif" style={{ fontWeight: 600, fontSize: 19 }}>הזמנה חדשה</span>
               <button className="btn btn-ghost btn-sm" onClick={() => { setView('list'); setMsg('') }}>✕</button>
             </div>
 
@@ -388,7 +394,7 @@ export default function ClientPortal({ token }) {
                   placeholder="פרטים נוספים — גדלים, צבעים, שעות הקמה, כל מה שחשוב…" />
               </div>
 
-              {msg && <div style={{ color: '#E5735B', fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+              {msg && <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600 }}>{msg}</div>}
 
 
             </div>

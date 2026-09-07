@@ -27,7 +27,7 @@ export default function OrderProgress({ status }) {
   }
 
   const rejected = status === 'rejected'
-  const tone = rejected ? '#E5735B' : 'var(--gold)'
+  const tone = rejected ? 'var(--danger)' : 'var(--gold)'
 
   return (
     <div style={{ margin: '12px 0 4px' }}>
@@ -48,7 +48,7 @@ export default function OrderProgress({ status }) {
                 flex: '0 0 auto',
                 background: done ? tone : 'var(--card-2)',
                 border: `2px solid ${done ? tone : 'var(--line)'}`,
-                boxShadow: isNow ? `0 0 0 3px ${rejected ? 'rgba(229,115,91,.18)' : 'rgba(238,196,33,.18)'}` : 'none',
+                boxShadow: isNow ? `0 0 0 3px ${rejected ? 'color-mix(in srgb, var(--danger) 22%, transparent)' : 'color-mix(in srgb, var(--gold) 22%, transparent)'}` : 'none',
               }} />
             </React.Fragment>
           )
@@ -58,7 +58,7 @@ export default function OrderProgress({ status }) {
         {STEPS.map((s, i) => (
           <span key={s.key} style={{
             fontSize: 10.5, fontWeight: i === at ? 700 : 500,
-            color: i === at ? (rejected ? '#E5735B' : 'var(--gold-fg)') : 'var(--ink45)',
+            color: i === at ? (rejected ? 'var(--danger)' : 'var(--gold-fg)') : 'var(--ink45)',
             flex: i === 0 || i === STEPS.length - 1 ? '0 0 auto' : 1,
             textAlign: i === 0 ? 'start' : i === STEPS.length - 1 ? 'end' : 'center',
           }}>{i === at && rejected ? 'צריך תיקון' : s.label}</span>

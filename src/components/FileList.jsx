@@ -51,9 +51,9 @@ export default function FileList({
               </a>
               {onDelete && canDelete(f) && (
                 confirmId === f.id
-                  ? <button className="btn btn-sm" style={{ flex: '0 0 auto', color: '#fff', background: '#B23A2A', borderColor: '#B23A2A' }}
+                  ? <button className="btn btn-sm" style={{ flex: '0 0 auto', color: '#fff', background: 'var(--danger)', borderColor: 'var(--danger)' }}
                       onClick={() => { setConfirmId(null); onDelete(f) }}>בטוח?</button>
-                  : <button className="btn btn-ghost btn-sm" style={{ flex: '0 0 auto', color: '#E5735B' }}
+                  : <button className="btn btn-ghost btn-sm" style={{ flex: '0 0 auto', color: 'var(--danger)' }}
                       onClick={() => setConfirmId(f.id)}>✕</button>
               )}
             </div>
@@ -72,7 +72,7 @@ export default function FileList({
           <div className="t-meta" style={{ marginTop: 6, lineHeight: 1.6 }}>{hint}</div>
         </>
       )}
-      {err && <div style={{ color: '#E5735B', fontSize: 12.5, marginTop: 6 }}>{err}</div>}
+      {err && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 6 }}>{err}</div>}
     </div>
   )
 }

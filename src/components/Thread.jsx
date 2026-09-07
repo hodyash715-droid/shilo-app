@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 
 const KIND = {
-  change: { label: 'בקשת שינוי', color: '#D9822B' },
-  reject: { label: 'סיבת דחייה', color: '#E5735B' },
+  change: { label: 'בקשת שינוי', color: 'var(--warn)' },
+  reject: { label: 'סיבת דחייה', color: 'var(--danger)' },
 }
 
 const when = (iso) => {

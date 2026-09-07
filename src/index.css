@@ -33,6 +33,12 @@
   --signal:  #EEC421;
   --signal-bg: #201C10;
 
+  /* --- מצבים --- */
+  --warn:    #D9822B;
+  --warn-fg: #E0954A;
+  --danger:  #E5735B;
+  --wa:      #55C07E;
+
   /* --- רדיוס --- */
   --r-card:  13px;
   --r:       9px;
@@ -282,3 +288,66 @@ body {
 @media (max-width: 560px) {
   .toast { bottom: calc(94px + env(safe-area-inset-bottom)); }
 }
+
+
+/* =========================================================================
+   דף המפיקות — ערכה נפרדת לגמרי מהצד הפנימי של שי.
+   הלקוחות הן מפיקות מקצועיות; הדף צריך להרגיש כמו סטודיו עיצוב,
+   לא כמו לוח בקרה. נייר חם, דיו אספרסו, אקצנט חימר.
+   ========================================================================= */
+.portal {
+  --paper:   #FAF7F2;
+  --card:    #FFFFFF;
+  --card-2:  #F5F0E9;
+  --line:    #E7DDD1;
+  --hair:    #F0E9DF;
+
+  --ink:     #2B2429;
+  --ink70:   #6B6058;
+  --ink45:   #968A7E;
+  --ink25:   #BFB3A6;
+
+  --gold:    #C2725A;   /* חימר */
+  --on-gold: #FFFFFF;
+  --gold-bg: #FBF0EB;
+  --gold-fg: #A85B45;
+
+  --go:      #7E8F73;   /* מרווה */
+  --go-bg:   #F1F4EE;
+  --go-fg:   #5C6E51;
+
+  --brand:   #C2725A;
+  --signal:  #C2725A;
+  --signal-bg: #FBF0EB;
+
+  --warn:    #B0763C;
+  --warn-fg: #96622F;
+  --danger:  #B0483A;
+  --wa:      #4A8F63;
+
+  --shadow-card: 0 1px 2px rgba(43,36,41,.05), 0 10px 26px -20px rgba(43,36,41,.35);
+  --shadow-pop:  0 22px 54px -26px rgba(43,36,41,.35);
+
+  background: var(--paper);
+  color: var(--ink);
+}
+.portal body { background: var(--paper); color: var(--ink); }
+
+/* סריף עברי קלאסי לכותרות — Frank Ruhl Libre */
+.portal .t-h1,
+.portal .t-h2,
+.portal .serif { font-family: "Frank Ruhl Libre", Georgia, "Times New Roman", serif; font-weight: 500; }
+
+/* כרטיסים נושמים יותר, גבולות רכים */
+.portal .card { box-shadow: var(--shadow-card); border-radius: 14px; }
+.portal .btn  { border-radius: 10px; }
+.portal .field { border-radius: 10px; background: var(--card); }
+.portal .field::placeholder { color: var(--ink25); }
+.portal .brand-mark { background: var(--ink); color: var(--paper); }
+.portal .btn:hover { background: var(--card-2); }
+.portal .btn-solid:hover { background: #AE6450; }
+.portal .btn-signal:hover { background: #AE6450; }
+.portal .chip { background: var(--card-2); color: var(--ink70); }
+.portal ::-webkit-scrollbar-thumb { background: #DCD1C3; border-color: var(--paper); }
+.portal .field:focus { outline-color: var(--gold); }
+.portal .version-badge { opacity: .5; }
