@@ -9,10 +9,15 @@ export const FILES_FN = 'https://bypgbgosywlgjdczrjhc.supabase.co/functions/v1/s
 
 export const filesEnabled = () => Boolean(FILES_FN)
 
+// השער של Supabase דורש כותרת זיהוי גם לפונקציה ציבורית.
+// זה המפתח הפומבי שממילא נמצא באפליקציה — ההרשאה האמיתית
+// היא הטוקן של המפיקה, שנבדק בתוך הפונקציה.
+const gate = () => ({ apikey: import.meta.env.VITE_SUPABASE_ANON_KEY })
+
 async function call(body) {
   const res = await fetch(FILES_FN, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...gate(), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
   const j = await res.json().catch(() => ({}))
@@ -31,7 +36,7 @@ export async function uploadClientFile(token, jobId, file) {
   fd.append('token', token)
   fd.append('job_id', jobId)
   fd.append('file', file)
-  const res = await fetch(FILES_FN, { method: 'POST', body: fd })
+  const res = await fetch(FILES_FN, { method: 'POST', headers: gate(), body: fd })
   const j = await res.json().catch(() => ({}))
   if (!res.ok) {
     if (res.status === 413) throw new Error('הקובץ גדול מדי (עד 10MB)')
