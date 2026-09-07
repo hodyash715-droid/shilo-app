@@ -271,6 +271,12 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
     txt(`${p.mat}`, T.x + T.w - 2, sy2, { size: 2.7 })
     txt(`${p.barCount}×${p.stock} ס״מ · פחת ${p.wastePct}%`, T.x + 2, sy2, { size: 2.7, align: 'left' })
     sy2 += 4.2
+    // חלק ארוך מהקורה לא נספר בכמות — בלי אזהרה הנגר יקנה חסר
+    if (p.tooLong?.length) {
+      txt(`⚠ ${p.tooLong.length} חלקים ארוכים מהקורה: ${p.tooLong.map(Math.round).join(', ')} ס״מ`,
+        T.x + T.w - 2, sy2, { size: 2.5, bold: true })
+      sy2 += 4
+    }
   })
 
   // ---- מסגרת כותרת ----
