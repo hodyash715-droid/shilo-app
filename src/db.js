@@ -20,6 +20,15 @@ const fromRow = r => ({
   eventTime: r.event_time ? String(r.event_time).slice(0, 5) : '',
   clientId: r.client_id || null,
   showItemPrices: !!r.show_item_prices,
+  service: r.service || 'setup',
+  setupDate: r.setup_date || null,
+  setupTime: r.setup_time ? String(r.setup_time).slice(0, 5) : '',
+  teardownDate: r.teardown_date || null,
+  teardownTime: r.teardown_time ? String(r.teardown_time).slice(0, 5) : '',
+  contactName: r.contact_name || '',
+  contactPhone: r.contact_phone || '',
+  accessNotes: r.access_notes || '',
+  referenceUrl: r.reference_url || '',
 })
 
 const toRow = j => ({
@@ -65,6 +74,10 @@ export async function updateJob(id, patch) {
     status:'status', price:'price', items:'items', team:'team', note:'note',
     venue:'venue', address:'address', eventTime:'event_time', clientId:'client_id',
     showItemPrices:'show_item_prices',
+    service:'service', setupDate:'setup_date', setupTime:'setup_time',
+    teardownDate:'teardown_date', teardownTime:'teardown_time',
+    contactName:'contact_name', contactPhone:'contact_phone',
+    accessNotes:'access_notes', referenceUrl:'reference_url',
     quoteStatus:'quote_status', quoteSentAt:'quote_sent_at', quoteDecidedAt:'quote_decided_at' }
   for (const k in patch) if (map[k] !== undefined) row[map[k]] = patch[k]
   const { data, error } = await supabase
@@ -285,6 +298,15 @@ export async function clientSubmitOrder(token, o) {
     p_time: o.time || null,
     p_note: o.note || null,
     p_items: o.items || [],
+    p_service: o.service || 'setup',
+    p_setup_date: o.setupDate || null,
+    p_setup_time: o.setupTime || null,
+    p_teardown_date: o.teardownDate || null,
+    p_teardown_time: o.teardownTime || null,
+    p_contact_name: o.contactName || null,
+    p_contact_phone: o.contactPhone || null,
+    p_access: o.access || null,
+    p_reference: o.reference || null,
   })
   if (error) throw error
   return data

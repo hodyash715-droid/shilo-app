@@ -159,3 +159,6 @@ export function clientWaMessage(client, order, lastBody) {
   const about = `לגבי "${order.title}"${no}${order.event_date ? ` (${fmtDate(order.event_date)})` : ''}:`
   return lastBody ? `${head}\n${about}\n${lastBody}` : `${head}\n${about}`
 }
+
+// סוג השירות שהמפיקה ביקשה
+export const SERVICE_LABEL = { setup: 'הובלה והקמה', delivery: 'הובלה בלבד', pickup: 'איסוף עצמי' }

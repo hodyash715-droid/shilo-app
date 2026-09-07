@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { clientPortal, clientSubmitOrder, clientDecideQuote, clientPostMessage } from '../db.js'
 import Thread from './Thread.jsx'
 import OrderProgress from './OrderProgress.jsx'
+import ClientOrderForm from './ClientOrderForm.jsx'
 import FileList from './FileList.jsx'
 import { filesEnabled, listClientFiles, uploadClientFile, deleteClientFile } from '../files.js'
-import { fmtDate, relLabel, ils, CATEGORIES, shortTime, placeOf, wazeLink, waLink, BUSINESS, clientWaMessage } from '../data.js'
+import { fmtDate, ils, shortTime, placeOf, wazeLink, waLink, BUSINESS, clientWaMessage } from '../data.js'
 
 const QSTATE = {
   needs_quote: { label: 'ממתין להצעת מחיר', color: 'var(--gold-fg)' },
@@ -36,30 +37,6 @@ export default function ClientPortal({ token }) {
     data.orders.forEach(o => loadFiles(o.id))
   }, [data])
 
-  // ---- טופס הזמנה ----
-  const [f, setF] = useState({ title: '', eventDate: '', time: '', venue: '', address: '', note: '' })
-  const [picked, setPicked] = useState({})   // name -> qty
-  const set = (k, v) => setF(s => ({ ...s, [k]: v }))
-  const bump = (name, d) => setPicked(p => {
-    const n = Math.max(0, (p[name] || 0) + d)
-    const c = { ...p }; if (n === 0) delete c[name]; else c[name] = n
-    return c
-  })
-
-  const submit = async () => {
-    if (!f.title.trim() && Object.keys(picked).length === 0) { setMsg('כתבי שם לאירוע או בחרי פריטים'); return }
-    setBusy(true); setMsg('')
-    try {
-      await clientSubmitOrder(token, {
-        ...f,
-        items: Object.entries(picked).map(([name, qty]) => ({ name, qty, cat: 'other', price: 0 })),
-      })
-      setF({ title: '', eventDate: '', time: '', venue: '', address: '', note: '' }); setPicked({})
-      setView('list'); await load()
-      setMsg('ההזמנה נשלחה לשי ✓')
-    } catch (e) { setMsg('השליחה נכשלה: ' + (e.message || e)) }
-    setBusy(false)
-  }
 
   const [filesBy, setFilesBy] = useState({})          // jobId -> קבצים
   const loadFiles = async (jobId) => {
@@ -108,7 +85,6 @@ export default function ClientPortal({ token }) {
   )
 
   const { client, orders = [], catalog = [] } = data
-  const pickedCount = Object.values(picked).reduce((a, b) => a + b, 0)
   // ההזמנה שהכי "חיה" כרגע — היא ההקשר הטבעי לפנייה לשי
   const hotOrder = orders.find(o => o.quote_status === 'sent')
     || orders.find(o => ['needs_quote', 'rejected'].includes(o.quote_status))
@@ -116,7 +92,7 @@ export default function ClientPortal({ token }) {
   const awaiting = orders.filter(o => o.quote_status === 'sent')
 
   return (
-    <div style={{ minHeight: '100%', paddingBottom: view === 'new' ? 96 : 40 }}>
+    <div style={{ minHeight: '100%', paddingBottom: 40 }}>
       <header style={{ borderBottom: '1px solid var(--line)', background: 'var(--card)' }}>
         <div style={{ maxWidth: 620, margin: '0 auto', padding: '14px 16px' }} className="row between gap-3">
           <div className="row gap-3" style={{ minWidth: 0 }}>
@@ -338,83 +314,20 @@ export default function ClientPortal({ token }) {
             )}
           </>
         ) : (
-          /* ---------- טופס הזמנה ---------- */
+          /* ---------- טופס הזמנה — אשף בשלושה שלבים ---------- */
           <>
             <div className="row between gap-2" style={{ marginBottom: 12 }}>
               <span style={{ width: 22, height: 1, background: 'var(--gold)' }} />
-              <span className="serif" style={{ fontWeight: 600, fontSize: 19 }}>הזמנה חדשה</span>
               <button className="btn btn-ghost btn-sm" onClick={() => { setView('list'); setMsg('') }}>✕</button>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <div className="t-meta" style={{ marginBottom: 6 }}>שם האירוע</div>
-                <input className="field" value={f.title} onChange={e => set('title', e.target.value)} placeholder="השקת מוצר — נגה טק" />
-              </div>
-              <div className="row gap-3">
-                <div className="grow">
-                  <div className="t-meta" style={{ marginBottom: 6 }}>תאריך</div>
-                  <input className="field" type="date" dir="ltr" value={f.eventDate} onChange={e => set('eventDate', e.target.value)} />
-                </div>
-                <div style={{ width: 118 }}>
-                  <div className="t-meta" style={{ marginBottom: 6 }}>שעה</div>
-                  <input className="field" type="time" dir="ltr" value={f.time} onChange={e => set('time', e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <div className="t-meta" style={{ marginBottom: 6 }}>שם המקום</div>
-                <input className="field" value={f.venue} onChange={e => set('venue', e.target.value)} placeholder="נמל תל אביב — האנגר 11" />
-              </div>
-              <div>
-                <div className="t-meta" style={{ marginBottom: 6 }}>כתובת מלאה</div>
-                <input className="field" value={f.address} onChange={e => set('address', e.target.value)} placeholder="הנגר 11, תל אביב" />
-              </div>
-
-              <div>
-                <div className="t-meta" style={{ marginBottom: 8 }}>מה נדרש? (אפשר לבחור ואפשר לכתוב)</div>
-                {catalog.length > 0 && (() => {
-                  // קיבוץ לפי קטגוריה — 14 שורות זהות זה קיר, לא קטלוג
-                  const groups = {}
-                  catalog.forEach(c => { (groups[c.category || 'other'] ||= []).push(c) })
-                  return Object.entries(groups).map(([cat, list]) => {
-                    const inGroup = list.reduce((n, c) => n + (picked[c.name] || 0), 0)
-                    return (
-                      <div key={cat} style={{ marginBottom: 10 }}>
-                        <div className="row between" style={{ margin: '0 0 6px' }}>
-                          <span className="serif" style={{ fontWeight: 600, fontSize: 16 }}>{CATEGORIES[cat] || 'אחר'}</span>
-                          {inGroup > 0 && <span className="chip chip-go">{inGroup} נבחרו</span>}
-                        </div>
-                        <div className="card" style={{ overflow: 'hidden' }}>
-                          {list.map((c, i) => {
-                            const n = picked[c.name] || 0
-                            return (
-                              <div key={c.name} className="row gap-2" style={{
-                                padding: '9px 11px', borderTop: i ? '1px solid var(--hair)' : 0,
-                                background: n ? 'var(--gold-bg)' : 'transparent',
-                              }}>
-                                <div className="grow" style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: 14, fontWeight: 600 }} className="truncate">{c.name}</div>
-                                </div>
-                                {n > 0 && <button className="btn btn-sm" style={{ width: 36 }} onClick={() => bump(c.name, -1)}>−</button>}
-                                {n > 0 && <span className="mono" style={{ width: 20, textAlign: 'center', fontWeight: 700 }}>{n}</span>}
-                                <button className="btn btn-sm" style={{ width: 36 }} onClick={() => bump(c.name, +1)}>+</button>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })
-                })()}
-                <textarea className="field" style={{ height: 90, padding: '10px 12px', resize: 'vertical' }}
-                  value={f.note} onChange={e => set('note', e.target.value)}
-                  placeholder="פרטים נוספים — גדלים, צבעים, שעות הקמה, כל מה שחשוב…" />
-              </div>
-
-              {msg && <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600 }}>{msg}</div>}
-
-
-            </div>
+            <ClientOrderForm
+              token={token}
+              client={client}
+              catalog={catalog}
+              active={view === 'new'}
+              onSubmit={clientSubmitOrder}
+              onSubmitted={async (id) => { setView('list'); await load(); setMsg('ההזמנה נשלחה לשי ✓') }}
+            />
           </>
         )}
 
@@ -425,25 +338,6 @@ export default function ClientPortal({ token }) {
         </div>
       </div>
 
-      {/* פס סיכום דביק — תמיד רואים כמה נבחר ואיך שולחים */}
-      {view === 'new' && (
-        <div className="row between gap-3" style={{
-          position: 'fixed', insetInline: 0, bottom: 0, zIndex: 30,
-          background: 'color-mix(in srgb, var(--card) 95%, transparent)',
-          backdropFilter: 'blur(10px)', borderTop: '1px solid var(--line)',
-          padding: '10px 16px calc(10px + env(safe-area-inset-bottom))',
-          boxShadow: '0 -12px 28px -18px rgba(0,0,0,.8)',
-        }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>
-              {pickedCount === 0 ? 'לא נבחרו פריטים' : `${pickedCount} פריטים נבחרו`}
-            </div>
-            <div className="t-meta truncate">{f.title || 'ללא שם אירוע'}</div>
-          </div>
-          <button className="btn btn-solid" style={{ height: 44, flex: '0 0 auto' }}
-            disabled={busy} onClick={submit}>{busy ? 'שולח…' : 'שליחת ההזמנה'}</button>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel, quoteOf, waLink, placeOf, wazeLink, mapsLink, shortTime, portalLink, mailLink, quoteMessage } from '../data.js'
+import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel, quoteOf, waLink, placeOf, wazeLink, mapsLink, shortTime, portalLink, mailLink, quoteMessage, SERVICE_LABEL } from '../data.js'
 import { Thumb, catLabel, EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
 import Thread from './Thread.jsx'
@@ -230,6 +230,52 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
             </div>
           )}
 
+          {/* לוגיסטיקה — מה שהמפיקה ביקשה */}
+          {(job.service && job.service !== 'setup') || job.setupDate || job.teardownDate
+            || job.contactName || job.accessNotes || job.referenceUrl ? (
+            <>
+              <div className="t-meta" style={{ margin: '18px 0 8px' }}>הגעה והקמה</div>
+              <div style={{
+                background: 'var(--card-2)', border: '1px solid var(--line)',
+                borderRadius: 9, padding: '10px 12px', marginBottom: 4,
+              }}>
+                {[
+                  ['שירות', SERVICE_LABEL[job.service] || SERVICE_LABEL.setup],
+                  ['הגעה', job.setupDate && `${fmtDate(job.setupDate)}${job.setupTime ? ' · ' + shortTime(job.setupTime) : ''}`],
+                  ['פירוק', job.teardownDate && `${fmtDate(job.teardownDate)}${job.teardownTime ? ' · ' + shortTime(job.teardownTime) : ''}`],
+                ].filter(([, v]) => v).map(([k, v]) => (
+                  <div key={k} className="row between gap-2" style={{ fontSize: 13.5, padding: '3px 0' }}>
+                    <span className="t-meta">{k}</span><span>{v}</span>
+                  </div>
+                ))}
+                {job.contactName && (
+                  <div className="row between gap-2" style={{ fontSize: 13.5, padding: '3px 0' }}>
+                    <span className="t-meta">איש קשר בשטח</span>
+                    <span>
+                      {job.contactName}
+                      {job.contactPhone && <> · <a href={`tel:${job.contactPhone}`} className="mono"
+                        style={{ color: 'var(--gold-fg)', textDecoration: 'none' }}>{job.contactPhone}</a></>}
+                    </span>
+                  </div>
+                )}
+                {job.accessNotes && (
+                  <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--hair)' }}>
+                    <div className="t-meta" style={{ marginBottom: 2 }}>גישה ופריקה</div>
+                    <div style={{ fontSize: 13, color: 'var(--ink70)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{job.accessNotes}</div>
+                  </div>
+                )}
+                {job.referenceUrl && (
+                  <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--hair)' }}>
+                    <a href={job.referenceUrl} target="_blank" rel="noreferrer"
+                      style={{ fontSize: 13, color: 'var(--gold-fg)', wordBreak: 'break-all' }}>
+                      🔗 קבצים והשראה מהלקוחה
+                    </a>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : null}
+
           {/* קבצים */}
           <div className="row between" style={{ margin: '18px 0 8px' }}>
             <div className="t-meta">קבצים ומיתוג</div>
@@ -333,6 +379,7 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 14 }} className="truncate">{it.name}</div>
                     <div className="t-meta">{catLabel(it.cat)} · כמות {it.qty}</div>
+                    {it.note && <div style={{ fontSize: 12.5, color: 'var(--ink70)', marginTop: 5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{it.note}</div>}
                   </div>
                   <div className="mono" style={{ fontWeight: 600 }}>{ils(it.price)}</div>
                 </div>
@@ -349,7 +396,7 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
           {job.note && (
             <>
               <div className="t-meta" style={{ margin: '16px 0 6px' }}>הערה</div>
-              <div style={{ background: 'var(--card-2)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', fontSize: 14, color: 'var(--ink70)' }}>{job.note}</div>
+              <div style={{ background: 'var(--card-2)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', fontSize: 14, color: 'var(--ink70)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{job.note}</div>
             </>
           )}
         </div>
