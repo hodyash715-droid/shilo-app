@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { clientPortal, clientSubmitOrder, clientDecideQuote, clientPostMessage } from '../db.js'
-import { Thumb } from './ui.jsx'
 import Thread from './Thread.jsx'
 import OrderProgress from './OrderProgress.jsx'
 import FileList from './FileList.jsx'
@@ -318,9 +317,10 @@ export default function ClientPortal({ token }) {
         ) : (
           /* ---------- טופס הזמנה ---------- */
           <>
-            <div className="row gap-2" style={{ marginBottom: 12 }}>
+            <div className="row between gap-2" style={{ marginBottom: 12 }}>
               <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />
               <span style={{ fontWeight: 700, fontSize: 16 }}>הזמנה חדשה</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setView('list'); setMsg('') }}>✕</button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -369,7 +369,6 @@ export default function ClientPortal({ token }) {
                                 padding: '9px 11px', borderTop: i ? '1px solid var(--hair)' : 0,
                                 background: n ? 'var(--gold-bg)' : 'transparent',
                               }}>
-                                <Thumb cat={c.category} size={34} />
                                 <div className="grow" style={{ minWidth: 0 }}>
                                   <div style={{ fontSize: 14, fontWeight: 600 }} className="truncate">{c.name}</div>
                                 </div>
