@@ -374,6 +374,7 @@ export default function App() {
           onSaved={onSaved}
           onDeleted={onDeleted}
           inventory={inventory}
+          clients={clients}
         />
       )}
 

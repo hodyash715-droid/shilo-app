@@ -3,11 +3,12 @@ import { STATUSES, CATEGORIES, ils } from '../data.js'
 import { createJob, updateJob, deleteJob } from '../db.js'
 
 const blank = () => ({
-  title: '', client: '', contact: '', eventDate: '', status: 'inquiry',
+  title: '', client: '', contact: '', eventDate: '', eventTime: '', status: 'inquiry',
+  venue: '', address: '', clientId: null,
   items: [], team: [], note: '',
 })
 
-export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = [] }) {
+export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = [], clients = [] }) {
   const editing = Boolean(job && job.id)
   const [f, setF] = useState(() => job ? { ...blank(), ...job } : blank())
   const [busy, setBusy] = useState(false)
@@ -31,6 +32,10 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
         items: f.items.map(it => ({ ...it, qty: Number(it.qty) || 1, price: Number(it.price) || 0 })),
         team: Array.isArray(f.team) ? f.team : String(f.team).split(',').map(s => s.trim()).filter(Boolean),
         eventDate: f.eventDate || null,
+        eventTime: f.eventTime || null,     // עמודת time לא מקבלת מחרוזת ריקה
+        venue: (f.venue || '').trim() || null,
+        address: (f.address || '').trim() || null,
+        clientId: f.clientId || null,
       }
       const saved = editing ? await updateJob(job.id, payload) : await createJob(payload)
       onSaved(saved)
@@ -61,7 +66,10 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
         display: 'flex', flexDirection: 'column',
       }}>
         <div className="row between" style={{ padding: '16px 18px', borderBottom: '1px solid var(--line)' }}>
-          <div className="t-h2">{editing ? 'עריכת עבודה' : 'עבודה חדשה'}</div>
+          <div className="row gap-2">
+            <div className="t-h2">{editing ? 'עריכת עבודה' : 'עבודה חדשה'}</div>
+            {f.orderNo && <span className="chip mono">#{f.orderNo}</span>}
+          </div>
           <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="סגור">✕</button>
         </div>
 
@@ -74,12 +82,23 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
           </div>
           <div className="row gap-3">
             <div className="grow">{label('תאריך אירוע')}<input className="field" type="date" dir="ltr" value={f.eventDate || ''} onChange={e => set('eventDate', e.target.value)} /></div>
+            <div style={{ width: 118 }}>{label('שעה')}<input className="field" type="time" dir="ltr" value={f.eventTime || ''} onChange={e => set('eventTime', e.target.value)} /></div>
+          </div>
+          <div className="row gap-3">
             <div className="grow">{label('סטטוס')}
               <select className="field" value={f.status} onChange={e => set('status', e.target.value)}>
                 {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </div>
+            <div className="grow">{label('מפיקה')}
+              <select className="field" value={f.clientId || ''} onChange={e => set('clientId', e.target.value || null)}>
+                <option value="">— ללא —</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.company ? ` · ${c.company}` : ''}</option>)}
+              </select>
+            </div>
           </div>
+          <div>{label('מקום האירוע')}<input className="field" value={f.venue || ''} onChange={e => set('venue', e.target.value)} placeholder="אולמי הדר" /></div>
+          <div>{label('כתובת מלאה — לניווט')}<input className="field" value={f.address || ''} onChange={e => set('address', e.target.value)} placeholder="הרצל 12, ראשון לציון" /></div>
 
           {/* פריטים */}
           <div>

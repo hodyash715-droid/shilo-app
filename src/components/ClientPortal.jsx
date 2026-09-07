@@ -23,7 +23,7 @@ export default function ClientPortal({ token }) {
   useEffect(() => { load() }, [token])
 
   // ---- טופס הזמנה ----
-  const [f, setF] = useState({ title: '', eventDate: '', venue: '', note: '' })
+  const [f, setF] = useState({ title: '', eventDate: '', time: '', venue: '', address: '', note: '' })
   const [picked, setPicked] = useState({})   // name -> qty
   const set = (k, v) => setF(s => ({ ...s, [k]: v }))
   const bump = (name, d) => setPicked(p => {
@@ -40,7 +40,7 @@ export default function ClientPortal({ token }) {
         ...f,
         items: Object.entries(picked).map(([name, qty]) => ({ name, qty, cat: 'other', price: 0 })),
       })
-      setF({ title: '', eventDate: '', venue: '', note: '' }); setPicked({})
+      setF({ title: '', eventDate: '', time: '', venue: '', address: '', note: '' }); setPicked({})
       setView('list'); await load()
       setMsg('ההזמנה נשלחה לשי ✓')
     } catch (e) { setMsg('השליחה נכשלה: ' + (e.message || e)) }
@@ -177,10 +177,18 @@ export default function ClientPortal({ token }) {
                   <div className="t-meta" style={{ marginBottom: 6 }}>תאריך</div>
                   <input className="field" type="date" dir="ltr" value={f.eventDate} onChange={e => set('eventDate', e.target.value)} />
                 </div>
+                <div style={{ width: 118 }}>
+                  <div className="t-meta" style={{ marginBottom: 6 }}>שעה</div>
+                  <input className="field" type="time" dir="ltr" value={f.time} onChange={e => set('time', e.target.value)} />
+                </div>
               </div>
               <div>
-                <div className="t-meta" style={{ marginBottom: 6 }}>מיקום</div>
-                <input className="field" value={f.venue} onChange={e => set('venue', e.target.value)} placeholder="הנגר 11, נמל תל אביב" />
+                <div className="t-meta" style={{ marginBottom: 6 }}>שם המקום</div>
+                <input className="field" value={f.venue} onChange={e => set('venue', e.target.value)} placeholder="נמל תל אביב — האנגר 11" />
+              </div>
+              <div>
+                <div className="t-meta" style={{ marginBottom: 6 }}>כתובת מלאה</div>
+                <input className="field" value={f.address} onChange={e => set('address', e.target.value)} placeholder="הנגר 11, תל אביב" />
               </div>
 
               <div>

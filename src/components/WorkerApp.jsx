@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { TODAY, isoLocal, fmtDate, relLabel, availById, availLabel, shiftKindLabel, daysUntil } from '../data.js'
+import { TODAY, isoLocal, fmtDate, relLabel, availById, availLabel, shiftKindLabel, daysUntil, placeOf, wazeLink } from '../data.js'
 import { EmpAvatar } from './ui.jsx'
 import AvailPicker from './AvailPicker.jsx'
 
@@ -106,18 +106,33 @@ export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, 
                 {myShifts.map(s => {
                   const job = jobs.find(j => j.id === s.job_id)
                   const teardown = s.kind === 'teardown'
+                  const place = placeOf(job)
                   return (
-                    <div key={s.id} className="card" style={{ padding: 14, display: 'flex', gap: 12, alignItems: 'center' }}>
-                      <div style={{ flex: 'none', textAlign: 'center', width: 56 }}>
-                        <div className="mono" style={{ fontSize: 16, fontWeight: 700 }}>{s.start_time}</div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: teardown ? '#E5735B' : 'var(--gold)' }}>{shiftKindLabel(s.kind)}</div>
+                    <div key={s.id} className="card" style={{ padding: 14 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <div style={{ flex: 'none', textAlign: 'center', width: 56 }}>
+                          <div className="mono" style={{ fontSize: 16, fontWeight: 700 }}>{s.start_time}</div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: teardown ? '#E5735B' : 'var(--gold)' }}>{shiftKindLabel(s.kind)}</div>
+                        </div>
+                        <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--hair)' }} />
+                        <div className="grow" style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 15 }} className="truncate">{job ? job.title || job.client : 'אירוע'}</div>
+                          <div className="t-meta">{fmtDate(s.date)} · {relLabel(s.date)}</div>
+                          <div className="t-meta mono" style={{ marginTop: 2 }}>{s.start_time}–{s.end_time}</div>
+                        </div>
                       </div>
-                      <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--hair)' }} />
-                      <div className="grow" style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 15 }} className="truncate">{job ? job.title || job.client : 'אירוע'}</div>
-                        <div className="t-meta">{fmtDate(s.date)} · {relLabel(s.date)}</div>
-                        <div className="t-meta mono" style={{ marginTop: 2 }}>{s.start_time}–{s.end_time}</div>
-                      </div>
+                      {place && (
+                        <div className="row between gap-2" style={{
+                          marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--hair)',
+                        }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 600 }} className="truncate">📍 {job.venue || job.address}</div>
+                            {job.venue && job.address && <div className="t-meta truncate">{job.address}</div>}
+                          </div>
+                          <a className="btn btn-sm btn-solid" style={{ flex: '0 0 auto' }}
+                            href={wazeLink(place)} target="_blank" rel="noreferrer">🧭 ניווט</a>
+                        </div>
+                      )}
                     </div>
                   )
                 })}

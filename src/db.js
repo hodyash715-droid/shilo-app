@@ -13,6 +13,11 @@ const fromRow = r => ({
   team: Array.isArray(r.team) ? r.team : [],
   note: r.note || '',
   quoteStatus: r.quote_status || 'none',
+  orderNo: r.order_no || null,
+  venue: r.venue || '',
+  address: r.address || '',
+  eventTime: r.event_time ? String(r.event_time).slice(0, 5) : '',
+  clientId: r.client_id || null,
 })
 
 const toRow = j => ({
@@ -25,6 +30,10 @@ const toRow = j => ({
   items: j.items,
   team: j.team,
   note: j.note,
+  venue: j.venue || null,
+  address: j.address || null,
+  event_time: j.eventTime || null,
+  client_id: j.clientId || null,
 })
 
 export async function fetchJobs() {
@@ -51,6 +60,7 @@ export async function updateJob(id, patch) {
   const row = {}
   const map = { title:'title', client:'client', contact:'contact', eventDate:'event_date',
     status:'status', price:'price', items:'items', team:'team', note:'note',
+    venue:'venue', address:'address', eventTime:'event_time', clientId:'client_id',
     quoteStatus:'quote_status', quoteSentAt:'quote_sent_at', quoteDecidedAt:'quote_decided_at' }
   for (const k in patch) if (map[k] !== undefined) row[map[k]] = patch[k]
   const { data, error } = await supabase
@@ -129,7 +139,13 @@ export async function claimEmployeeCode(code, userId) {
 export async function fetchMyJobTitles() {
   const { data, error } = await supabase.rpc('my_job_titles')
   if (error) return []
-  return (data || []).map(r => ({ ...r, items: [], team: [], status: 'installed' }))
+  return (data || []).map(r => ({
+    id: r.id, title: r.title, client: r.client,
+    venue: r.venue || '', address: r.address || '',
+    eventTime: r.event_time ? String(r.event_time).slice(0, 5) : '',
+    eventDate: r.event_date || null,
+    items: [], team: [], status: 'installed',
+  }))
 }
 
 export async function linkEmployeeToUser(empId, userId) {
@@ -261,6 +277,8 @@ export async function clientSubmitOrder(token, o) {
     p_title: o.title || '',
     p_event_date: o.eventDate || null,
     p_venue: o.venue || null,
+    p_address: o.address || null,
+    p_time: o.time || null,
     p_note: o.note || null,
     p_items: o.items || [],
   })

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel, quoteOf, waLink } from '../data.js'
+import { STATUSES, statusIndex, fmtDate, relLabel, isUrgent, ils, shiftKindLabel, quoteOf, waLink, placeOf, wazeLink, mapsLink, shortTime } from '../data.js'
 import { Thumb, catLabel, EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
 
@@ -11,8 +11,9 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
   const next = STATUSES[curIdx + 1]
   const itemsTotal = job.items.reduce((s, it) => s + it.price, 0)
   const jobShifts = (shifts || []).filter(s => s.job_id === job.id)
-  const jobKool = (koolisot || []).filter(k => k.job_id === job.id)
     .sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.start_time || '').localeCompare(b.start_time || ''))
+  const jobKool = (koolisot || []).filter(k => k.job_id === job.id)
+  const place = placeOf(job)
 
   return (
     <div onClick={onClose} style={{
@@ -26,16 +27,37 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
       }}>
         <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--line)' }}>
           <div className="row between gap-2">
-            <div className="t-meta">{job.client} · {job.contact}</div>
-            <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="סגור">✕</button>
+            <div className="t-meta truncate">{job.client} · {job.contact}</div>
+            <div className="row gap-2" style={{ flex: '0 0 auto' }}>
+              {job.orderNo && <span className="chip mono">#{job.orderNo}</span>}
+              <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="סגור">✕</button>
+            </div>
           </div>
           <div className="t-h2" style={{ marginTop: 4 }}>{job.title}</div>
-          <div className="row gap-2" style={{ marginTop: 8 }}>
+          <div className="row gap-2 wrap" style={{ marginTop: 8 }}>
             <span className={urgent ? 'chip chip-signal' : 'chip'}>
               {urgent && <span className="chip-dot" />}🗓 {fmtDate(job.eventDate)}
             </span>
+            {job.eventTime && <span className="chip mono">{shortTime(job.eventTime)}</span>}
             <span className="t-meta">{relLabel(job.eventDate)}</span>
           </div>
+
+          {/* מקום האירוע + ניווט */}
+          {place && (
+            <div className="row between gap-2" style={{
+              marginTop: 10, background: 'var(--card-2)', border: '1px solid var(--line)',
+              borderRadius: 9, padding: '9px 11px',
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }} className="truncate">{job.venue || job.address}</div>
+                {job.venue && job.address && <div className="t-meta truncate">{job.address}</div>}
+              </div>
+              <div className="row gap-2" style={{ flex: '0 0 auto' }}>
+                <a className="btn btn-sm btn-solid" href={wazeLink(place)} target="_blank" rel="noreferrer">🧭 ניווט</a>
+                <a className="btn btn-sm" href={mapsLink(place)} target="_blank" rel="noreferrer">מפות</a>
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 18 }}>

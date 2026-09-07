@@ -112,3 +112,9 @@ export function waLink(phone, text) {
   const intl = d.startsWith('0') ? '972' + d.slice(1) : d
   return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`
 }
+
+// ---------- מקום האירוע וניווט ----------
+export const placeOf = (j) => [j?.venue, j?.address].filter(Boolean).join(', ')
+export const wazeLink = (q) => `https://waze.com/ul?q=${encodeURIComponent(q)}&navigate=yes`
+export const mapsLink = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
+export const orderLabel = (j) => (j?.orderNo ? `#${j.orderNo}` : '')

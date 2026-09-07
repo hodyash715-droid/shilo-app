@@ -44,13 +44,16 @@ function JobCard({ job, onOpen, onStatus }) {
       </div>
 
       <div>
-        <div className="t-item truncate">{job.title || '—'}</div>
-        <div className="t-meta">{job.client}</div>
+        <div className="row between gap-2">
+          <div className="t-item truncate">{job.title || '—'}</div>
+          {job.orderNo && <span className="t-meta mono" style={{ flex: '0 0 auto' }}>#{job.orderNo}</span>}
+        </div>
+        <div className="t-meta truncate">{job.client}{job.venue ? ` · ${job.venue}` : ''}</div>
       </div>
 
       <div className="row gap-2" style={{ color: 'var(--ink70)', fontSize: 13 }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-        <span>{fmtDate(job.eventDate)}</span>
+        <span>{fmtDate(job.eventDate)}{job.eventTime ? ` · ${job.eventTime}` : ''}</span>
       </div>
 
       {job.items.length > 0 ? (
