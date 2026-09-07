@@ -45,7 +45,7 @@ function NotLinked({ email, onSignOut }) {
 
 const VersionBadge = () => (
   <div className="mono version-badge" style={{
-    position: 'fixed', left: 10, bottom: 10, zIndex: 60,
+    position: 'fixed', left: 10, bottom: 10, zIndex: 25,
     fontSize: 11, color: 'var(--ink45)',
     background: 'var(--card)', border: '1px solid var(--line)',
     borderRadius: 999, padding: '3px 9px', pointerEvents: 'none',

@@ -390,13 +390,7 @@ export default function ClientPortal({ token }) {
 
               {msg && <div style={{ color: '#E5735B', fontSize: 13, fontWeight: 600 }}>{msg}</div>}
 
-              <div style={{ height: 8 }} />
-              <div className="row gap-2">
-                <button className="btn grow" onClick={() => { setView('list'); setMsg('') }}>ביטול</button>
-                <button className="btn btn-solid grow" style={{ height: 48 }} disabled={busy} onClick={submit}>
-                  {busy ? 'שולח…' : 'שליחת ההזמנה'}
-                </button>
-              </div>
+
             </div>
           </>
         )}
