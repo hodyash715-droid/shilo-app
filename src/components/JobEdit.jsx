@@ -29,7 +29,12 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
       const payload = {
         ...f,
         price: total,
-        items: f.items.map(it => ({ ...it, qty: Number(it.qty) || 1, price: Number(it.price) || 0 })),
+        // חוסמים מספרים לא הגיוניים: מחיר שלילי יצא ללקוח, וסכום ענק מפיל את השמירה
+        items: f.items.map(it => ({
+          ...it,
+          qty: Math.min(9999, Math.max(1, Math.round(Number(it.qty) || 1))),
+          price: Math.min(10000000, Math.max(0, Math.round(Number(it.price) || 0))),
+        })),
         team: Array.isArray(f.team) ? f.team : String(f.team).split(',').map(s => s.trim()).filter(Boolean),
         eventDate: f.eventDate || null,
         eventTime: f.eventTime || null,     // עמודת time לא מקבלת מחרוזת ריקה
