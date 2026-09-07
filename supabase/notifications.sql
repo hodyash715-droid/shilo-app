@@ -57,9 +57,10 @@ begin
     values (
       'shift',
       'שובצת למשמרת',
+      -- shifts.start_time הוא text ('08:00'), ו-date עלול להיות ריק
       coalesce(j.title, 'אירוע')
-        || ' · ' || to_char(new.date, 'DD.MM')
-        || coalesce(' ' || to_char(new.start_time, 'HH24:MI'), '')
+        || coalesce(' · ' || to_char(new.date, 'DD.MM'), '')
+        || coalesce(' ' || new.start_time, '')
         || coalesce(' · ' || j.venue, ''),
       new.job_id, 'employee', eid::uuid
     );
