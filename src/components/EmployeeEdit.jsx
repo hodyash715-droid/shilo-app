@@ -4,9 +4,15 @@ import { createEmployee, updateEmployee, deleteEmployee } from '../db.js'
 const blank = () => ({ name: '', role: '', phone: '', rate: '', active: true })
 const ROLES = ['מתקין', 'נהג', 'אחראי אתר', 'כללי']
 
-// קוד קצר וברור — בלי תווים מתבלבלים (0/O, 1/I)
-const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-const genCode = () => Array.from({ length: 6 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('')
+// קוד ההצטרפות הוא המפתח לכרטיס העובד — 8 תווים מאקראיות אמיתית.
+// בלי 0/O/1/I/L, כדי שאפשר יהיה להכתיב אותו בטלפון בלי טעויות.
+const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
+const genCode = () => {
+  const b = new Uint8Array(8)
+  crypto.getRandomValues(b)
+  return [...b].map(x => ALPHABET[x % ALPHABET.length]).join('')
+}
+const CODE_DAYS = 14
 
 export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
   const editing = Boolean(emp && emp.id)
@@ -25,7 +31,10 @@ export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
       const payload = {
         name: f.name.trim(), role: f.role.trim(), phone: f.phone.trim(),
         rate: f.rate === '' ? null : Number(f.rate), active: f.active,
-        ...(editing ? {} : { join_code: genCode() }),
+        ...(editing ? {} : {
+          join_code: genCode(),
+          join_expires_at: new Date(Date.now() + CODE_DAYS * 864e5).toISOString(),
+        }),
       }
       const saved = editing ? await updateEmployee(emp.id, payload) : await createEmployee(payload)
       onSaved(saved)
@@ -55,25 +64,54 @@ export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
             <div className="grow">{label('טלפון')}<input className="field" dir="ltr" style={{ textAlign: 'start' }} value={f.phone} onChange={e => set('phone', e.target.value)} placeholder="050-0000000" /></div>
             <div style={{ width: 120 }}>{label('שכר לשעה (₪)')}<input className="field" type="number" dir="ltr" value={f.rate} onChange={e => set('rate', e.target.value)} placeholder="60" /></div>
           </div>
-          {editing && f.join_code && (
-            <div className="card" style={{ padding: 14, background: 'var(--card-2)' }}>
-              <div className="t-meta" style={{ marginBottom: 4 }}>קוד הצטרפות לאפליקציה</div>
-              <button type="button" className="mono" title="העתק"
-                onClick={() => { try { navigator.clipboard.writeText(f.join_code); setCopied(true); setTimeout(() => setCopied(false), 1600) } catch { } }}
-                style={{
-                  width: '100%', appearance: 'none', cursor: 'pointer',
-                  background: 'transparent', border: '1px dashed var(--line)', borderRadius: 10,
-                  fontSize: 26, fontWeight: 700, letterSpacing: '.16em',
-                  color: 'var(--gold)', textAlign: 'center', padding: '8px 0', margin: '4px 0 8px',
-                }}>{f.join_code}</button>
-              {copied && <div style={{ textAlign: 'center', color: 'var(--go)', fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>הקוד הועתק ✓</div>}
-              <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, textAlign: 'center' }}>
-                {f.user_id
-                  ? '✓ העובד כבר מחובר לאפליקציה'
-                  : 'שלח את הקוד לעובד. הוא יפתח את האפליקציה, ילחץ "יש לי קוד הצטרפות" ויבחר סיסמה.'}
+          {editing && (() => {
+            const expired = f.join_expires_at && new Date(f.join_expires_at) < new Date()
+            const issue = async () => {
+              const code = genCode()
+              const exp = new Date(Date.now() + CODE_DAYS * 864e5).toISOString()
+              try {
+                const saved = await updateEmployee(emp.id, { join_code: code, join_expires_at: exp })
+                setF(s2 => ({ ...s2, join_code: code, join_expires_at: exp }))
+                onSaved(saved)
+              } catch (e) { setErr('הנפקת הקוד נכשלה') }
+            }
+            return (
+              <div className="card" style={{ padding: 14, background: 'var(--card-2)' }}>
+                <div className="t-meta" style={{ marginBottom: 4 }}>קוד הצטרפות לאפליקציה</div>
+
+                {f.user_id ? (
+                  <div className="muted" style={{ fontSize: 13, textAlign: 'center', padding: '8px 0' }}>
+                    ✓ העובד כבר מחובר לאפליקציה
+                  </div>
+                ) : f.join_code && !expired ? (
+                  <>
+                    <button type="button" className="mono" title="העתק"
+                      onClick={() => { try { navigator.clipboard.writeText(f.join_code); setCopied(true); setTimeout(() => setCopied(false), 1600) } catch { } }}
+                      style={{
+                        width: '100%', appearance: 'none', cursor: 'pointer',
+                        background: 'transparent', border: '1px dashed var(--line)', borderRadius: 10,
+                        fontSize: 22, fontWeight: 700, letterSpacing: '.14em',
+                        color: 'var(--gold)', textAlign: 'center', padding: '8px 0', margin: '4px 0 8px',
+                      }}>{f.join_code}</button>
+                    {copied && <div style={{ textAlign: 'center', color: 'var(--go)', fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>הקוד הועתק ✓</div>}
+                    <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, textAlign: 'center' }}>
+                      שלח את הקוד לעובד. הוא יפתח את האפליקציה, ילחץ "יש לי קוד הצטרפות" ויבחר סיסמה.
+                      {f.join_expires_at && <><br />הקוד תקף עד {new Date(f.join_expires_at).toLocaleDateString('he-IL')}.</>}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, textAlign: 'center', marginBottom: 8 }}>
+                      {expired ? 'הקוד פג תוקף.' : 'אין קוד פעיל.'} הנפק חדש כדי לצרף את העובד.
+                    </div>
+                    <button type="button" className="btn btn-sm" style={{ width: '100%' }} onClick={issue}>
+                      הנפק קוד חדש
+                    </button>
+                  </>
+                )}
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {err && <div style={{ color: '#E5735B', fontSize: 13, fontWeight: 500 }}>{err}</div>}
         </div>
