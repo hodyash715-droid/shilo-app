@@ -1,8 +1,12 @@
 import React, { useState } from 'react'
-import { createClientRec, deleteClientRec } from '../db.js'
+import { createClientRec, deleteClientRec, rotateClientToken } from '../db.js'
 import { waLink, portalLink, quoteOpen, relLabel, isoLocal } from '../data.js'
 
-const rndToken = () => Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6)
+const rndToken = () => {
+  const b = new Uint8Array(12)                       // 96 ביט
+  crypto.getRandomValues(b)
+  return [...b].map(x => x.toString(16).padStart(2, '0')).join('')
+}
 
 export default function ClientList({ clients = [], onSaved, onDeleted, jobs = [] }) {
   const [adding, setAdding] = useState(false)
@@ -11,6 +15,14 @@ export default function ClientList({ clients = [], onSaved, onDeleted, jobs = []
   const [err, setErr] = useState('')
   const [copied, setCopied] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
+  const [confirmRot, setConfirmRot] = useState(null)
+
+  // אם קישור דלף או הגיע לאדם הלא נכון — מחליפים אותו
+  const rotate = async (c) => {
+    setConfirmRot(null)
+    try { onSaved(await rotateClientToken(c.id, rndToken())) }
+    catch (e) { setErr('החלפת הקישור נכשלה') }
+  }
 
   // מה קורה עם כל מפיקה — כמה שלחה, מתי, וכמה פתוחות
   const stats = (c) => {
@@ -97,6 +109,15 @@ export default function ClientList({ clients = [], onSaved, onDeleted, jobs = []
                   </button>
                   {wa && <a className="btn btn-sm" href={wa} target="_blank" rel="noreferrer"
                     style={{ textDecoration: 'none', color: '#55C07E' }}>שלח בוואטסאפ</a>}
+                  {confirmRot === c.id ? (
+                    <>
+                      <button className="btn btn-sm" onClick={() => setConfirmRot(null)}>ביטול</button>
+                      <button className="btn btn-sm btn-solid" onClick={() => rotate(c)}>החלף — הישן יפסיק לעבוד</button>
+                    </>
+                  ) : (
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--ink45)' }}
+                      onClick={() => setConfirmRot(c.id)}>קישור חדש</button>
+                  )}
                   <div className="grow" />
                   {confirmDel === c.id ? (
                     <>

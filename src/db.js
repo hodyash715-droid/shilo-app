@@ -401,3 +401,11 @@ export async function deleteJobFile(f) {
   const { error } = await supabase.from('job_files').delete().eq('id', f.id)
   if (error) throw error
 }
+
+// החלפת הקישור האישי של מפיקה — הישן מפסיק לעבוד מיידית
+export async function rotateClientToken(id, token) {
+  const { data, error } = await supabase.from('clients')
+    .update({ token }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
