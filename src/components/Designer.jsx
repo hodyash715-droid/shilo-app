@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { DIMS, render, hitTest, lenOf, worldPerPixel, dragAxes, snapAlong } from '../designer/geometry.js'
-import { cutList, optimize, DEFAULT_STOCK } from '../designer/cuts.js'
+import { cutList, optimize, DEFAULT_STOCK, PURCHASE, KERF_OPTIONS, DEFAULT_KERF_MM, mmToCm } from '../designer/cuts.js'
 import { materialsFor } from '../designer/materials.js'
+import { generateKulisa, defaultFrameMaterial, BRACE_MAX, BRACE_DEFAULT, LIMITS_PREFERRED } from '../designer/kulisa.js'
+import { validateDims, invalidParts, tooLongParts } from '../designer/rules.js'
+import { wallProposals, wallCuts } from '../designer/wall.js'
 import DrawingSheet from './DrawingSheet.jsx'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -25,8 +28,18 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   const [parts, setParts] = useState([])
   const [sel, setSel] = useState(null)
   const [view, setView] = useState({ yaw: -0.7, pitch: 0.45, dist: 340, target: { x: 0, y: 90, z: 0 } })
-  const [panel, setPanel] = useState(null)   // null | 'add' | 'cuts' | 'load'
+  const [panel, setPanel] = useState(null)   // null | 'add' | 'cuts' | 'load' | 'gen' | 'wall'
+  const [wall, setWall] = useState({ w: 540, h: 240, pick: 0 })
+  const [gen, setGen] = useState({ w: 120, h: 240, matId: '', braces: BRACE_DEFAULT, giben: true })
   const [stockOv, setStockOv] = useState({})
+  // רוחב להב המסור, במ"מ. נשמר במכשיר — זו תכונה של המסור, לא של הקוליסה.
+  const [kerfMm, setKerfMm] = useState(() => {
+    try { return Number(localStorage.getItem('shilo:kerfMm')) || DEFAULT_KERF_MM } catch { return DEFAULT_KERF_MM }
+  })
+  const pickKerf = (mm) => {
+    setKerfMm(mm)
+    try { localStorage.setItem('shilo:kerfMm', String(mm)) } catch { /* מצב פרטי — לא נורא */ }
+  }
   const [sheet, setSheet] = useState(false)
   const [guides, setGuides] = useState([])
   const [snapOn, setSnapOn] = useState(true)
@@ -180,6 +193,52 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     setParts(ps => ps.filter(p => p.id !== sel)); setSel(null)
   }
 
+  // ---- מחולל קוליסה ----
+  // ברירת המחדל היא החומר שמקיים את הכלל המאושר (2 ס"מ בחזית), ולא סתם הראשון במלאי.
+  const genMat = materials.find(m => m.id === gen.matId) || defaultFrameMaterial(materials)
+  const genResult = React.useMemo(
+    () => generateKulisa({ width: gen.w, height: gen.h, depth: dims.עומק, material: genMat, braces: gen.braces, giben: gen.giben }),
+    [gen.w, gen.h, gen.braces, gen.giben, genMat, dims.עומק]
+  )
+  const applyGen = () => {
+    if (genResult.errors.length) return
+    if (parts.length && !confirm('פעולה זו מחליפה את כל החלקים שעל המשטח. להמשיך?')) return
+    snapshot()
+    setDims(d => ({ ...d, רוחב: gen.w, גובה: gen.h }))
+    setParts(genResult.parts)
+    setSel(null); setGuides([]); setPanel(null)
+    if (!name.trim()) setName(`קוליסה ${gen.h}×${gen.w}`)
+    setView(v => ({ ...v, target: { x: 0, y: gen.h / 2, z: 0 }, dist: Math.max(340, gen.h * 1.6) }))
+  }
+
+  // ---- מחלק קיר ----
+  const wallPlan = React.useMemo(() => wallProposals(wall.w, wall.h), [wall.w, wall.h])
+  const wallPick = wallPlan.proposals[wall.pick] || wallPlan.proposals[0] || null
+  const wallBuild = React.useMemo(() => {
+    if (!wallPick || !genMat) return null
+    const built = wallCuts(wallPick.widths, wall.h, { material: genMat, materials, braces: gen.braces, giben: gen.giben })
+    return { ...built, plans: optimize(built.rows, materials, {}, mmToCm(kerfMm)) }
+  }, [wallPick, wall.h, genMat, materials, gen.braces, gen.giben, kerfMm])
+
+  // פתיחת קוליסה בודדת מתוך הקיר, על המשטח
+  const openFromWall = (width, index) => {
+    if (parts.length && !confirm('פעולה זו מחליפה את כל החלקים שעל המשטח. להמשיך?')) return
+    const g = generateKulisa({ width, height: wall.h, depth: dims.עומק, material: genMat, braces: gen.braces, giben: gen.giben })
+    if (g.errors.length) return
+    snapshot()
+    setDims(d => ({ ...d, רוחב: width, גובה: wall.h }))
+    setParts(g.parts)
+    setSel(null); setGuides([]); setPanel(null)
+    setName(`קיר ${wall.w} · קוליסה ${index} (${width})`)
+    setView(v => ({ ...v, target: { x: 0, y: wall.h / 2, z: 0 }, dist: Math.max(340, wall.h * 1.6) }))
+  }
+
+  // ---- אימות: חלק שבור לא יגיע בשקט לרשימת החיתוך ----
+  const dimCheck = validateDims(dims)
+  const badParts = invalidParts(parts, dims)
+  const longParts = tooLongParts(parts, dims, materials, stockOv)
+  const badIds = new Set(badParts.map(b => b.id))
+
   const resetView = () => setView({ yaw: -0.7, pitch: 0.45, dist: 340, target: { x: 0, y: dims.גובה / 2, z: 0 } })
 
   // ---- שמירה / טעינה ----
@@ -211,7 +270,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   }, [target])
 
   const cuts = cutList(parts, dims, materials)
-  const plans = optimize(cuts, materials, stockOv)
+  const plans = optimize(cuts, materials, stockOv, mmToCm(kerfMm))
 
   const tbtn = (label, onClick, primary) => (
     <button className={primary ? 'btn btn-sm btn-solid' : 'btn btn-sm'} onClick={onClick} style={{ flex: '1 1 auto' }}>{label}</button>
@@ -250,6 +309,35 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
         </div>
       </div>
 
+      {/* אימות */}
+      {(dimCheck.errors.length > 0 || dimCheck.warnings.length > 0 || badParts.length > 0 || longParts.length > 0) && (
+        <div className="card" style={{
+          padding: 12, marginBottom: 12,
+          borderColor: dimCheck.errors.length || badParts.length ? 'var(--danger)' : 'var(--warn)',
+        }}>
+          {dimCheck.errors.map(e => (
+            <div key={e.field} style={{ color: 'var(--danger)', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
+              ✖ {e.message}
+            </div>
+          ))}
+          {badParts.map(b => (
+            <div key={b.id} style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 4 }}>
+              ✖ <b>{b.name}</b> — {b.message}. לא ייכנס לרשימת החיתוך.
+            </div>
+          ))}
+          {longParts.map(b => (
+            <div key={b.id} style={{ color: 'var(--warn-fg)', fontSize: 13, marginBottom: 4 }}>
+              ⚠ <b>{b.name}</b> — {b.message}
+            </div>
+          ))}
+          {dimCheck.warnings.map(w => (
+            <div key={w.field} style={{ color: 'var(--warn-fg)', fontSize: 13, marginBottom: 4 }}>
+              ⚠ {w.message}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* המשטח */}
       <div className="card" style={{ padding: 0, overflow: 'hidden', position: 'relative' }}>
         <canvas ref={cvRef}
@@ -266,7 +354,8 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
               <div style={{ fontSize: 34, marginBottom: 6 }}>🪚</div>
               <div style={{ fontWeight: 700 }}>המשטח ריק</div>
               <div className="muted" style={{ fontSize: 13, marginTop: 4, lineHeight: 1.7 }}>
-                לחץ <b>＋ חלק</b> כדי להתחיל.<br />גרור חלק להזזה · גרור רקע לסיבוב · שתי אצבעות לזום.
+                <b>🧱 קוליסה</b> בונה מסגרת שלמה ממידה · <b>🏗️ קיר</b> מחלק מידה גדולה לקוליסות.<br />
+                גרור חלק להזזה · גרור רקע לסיבוב · שתי אצבעות לזום.
               </div>
             </div>
           </div>
@@ -286,7 +375,9 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
 
       {/* סרגל כלים */}
       <div className="row gap-2 wrap" style={{ marginTop: 12 }}>
-        {tbtn('＋ חלק', () => setPanel('add'), true)}
+        {tbtn('🧱 קוליסה', () => setPanel(panel === 'gen' ? null : 'gen'), true)}
+        {tbtn('🏗️ קיר', () => setPanel(panel === 'wall' ? null : 'wall'), true)}
+        {tbtn('＋ חלק', () => setPanel('add'))}
         {tbtn('✂️ חיתוך', () => setPanel(panel === 'cuts' ? null : 'cuts'))}
         {parts.length > 0 && tbtn('📐 שרטוט', () => setSheet(true))}
         {tbtn('📂 קוליסות', () => setPanel(panel === 'load' ? null : 'load'))}
@@ -300,13 +391,207 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
           {parts.map((p, i) => (
             <button key={p.id} className="chip" onClick={() => setSel(p.id)} style={{
               cursor: 'pointer', border: '1px solid',
-              borderColor: p.id === sel ? 'var(--gold)' : 'var(--line)',
+              borderColor: badIds.has(p.id) ? 'var(--danger)' : p.id === sel ? 'var(--gold)' : 'var(--line)',
               background: p.id === sel ? 'var(--gold-bg)' : 'var(--card)',
-              color: p.id === sel ? 'var(--gold-fg)' : 'var(--ink70)',
+              color: badIds.has(p.id) ? 'var(--danger)' : p.id === sel ? 'var(--gold-fg)' : 'var(--ink70)',
             }}>
-              <span className="mono">{i + 1}</span> · {p.name} · <span className="mono">{Math.round(lenOf(p, dims))}</span>
+              <span className="mono">{i + 1}</span> · {p.name} · <span className="mono">{badIds.has(p.id) ? '✖' : Math.round(lenOf(p, dims))}</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* מחלק קיר */}
+      {panel === 'wall' && (
+        <div className="card" style={{ marginTop: 12, padding: 14 }}>
+          <div className="row between" style={{ marginBottom: 4 }}>
+            <span style={{ fontWeight: 700 }}>קיר — לכמה קוליסות מתחלק</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPanel(null)}>✕</button>
+          </div>
+          <div className="t-meta" style={{ marginBottom: 10 }}>
+            המידה שהמפיקה ביקשה. כל קוליסה עד <span className="mono">{LIMITS_PREFERRED.at(-1)}</span> ס״מ רוחב.
+          </div>
+
+          <div className="row gap-2" style={{ marginBottom: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div className="t-meta" style={{ marginBottom: 4 }}>רוחב הקיר</div>
+              <input className="field" type="number" dir="ltr" style={{ height: 38 }}
+                value={wall.w} onChange={e => setWall(s => ({ ...s, w: Number(e.target.value), pick: 0 }))} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div className="t-meta" style={{ marginBottom: 4 }}>גובה</div>
+              <input className="field" type="number" dir="ltr" style={{ height: 38 }}
+                value={wall.h} onChange={e => setWall(s => ({ ...s, h: Number(e.target.value), pick: 0 }))} />
+            </div>
+          </div>
+
+          {!wallPlan.ok ? (
+            <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 700 }}>
+              {wallPlan.errors.map(e => <div key={e}>✖ {e}</div>)}
+            </div>
+          ) : (
+            <>
+              {wallPlan.warnings.map(w => (
+                <div key={w} style={{ color: 'var(--warn-fg)', fontSize: 12, marginBottom: 8 }}>⚠ {w}</div>
+              ))}
+
+              <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+                {wallPlan.proposals.map((p, i) => {
+                  const on = i === (wallPlan.proposals[wall.pick] ? wall.pick : 0)
+                  return (
+                    <button key={p.id} onClick={() => setWall(s => ({ ...s, pick: i }))}
+                      style={{
+                        appearance: 'none', font: 'inherit', textAlign: 'start', cursor: 'pointer',
+                        padding: 10, borderRadius: 10, width: '100%',
+                        border: '1px solid', borderColor: on ? 'var(--gold)' : 'var(--line)',
+                        background: on ? 'var(--gold-bg)' : 'var(--card)', color: 'var(--ink)',
+                      }}>
+                      <div className="row between gap-2" style={{ marginBottom: 6 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13 }}>{p.label}</span>
+                        <span className="t-meta mono">{p.widths.length} קוליסות</span>
+                      </div>
+                      <div className="row" style={{ gap: 2, height: 30, marginBottom: 6 }} dir="ltr">
+                        {p.widths.map((w, j) => (
+                          <span key={j} style={{
+                            flex: w, display: 'grid', placeItems: 'center', minWidth: 0,
+                            background: 'var(--gold)', color: 'var(--on-gold)',
+                            fontSize: 10, fontWeight: 700, borderRadius: 3,
+                          }}>{w}</span>
+                        ))}
+                      </div>
+                      <div className="t-meta">{p.notes.join(" · ")}</div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {wallBuild && (
+                <div className="card" style={{ padding: 10, background: 'var(--gold-bg)' }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
+                    לקיר כולו: <span className="mono">{wallBuild.totalCuts}</span> חיתוכים
+                  </div>
+                  <div className="row gap-2 wrap" style={{ marginBottom: 8 }}>
+                    {wallBuild.rows.map(r => (
+                      <span key={r.len} className="chip">
+                        <span className="mono">{r.qty}× {r.len}</span>
+                      </span>
+                    ))}
+                  </div>
+                  {wallBuild.plans.map(pl => (
+                    <div key={pl.key} className="t-meta" style={{ marginBottom: 4 }}>
+                      {pl.mat}: <b className="mono">{pl.barCount}× {pl.stock}</b> ס״מ
+                      {" · סה״כ "}<span className="mono">{pl.barCount * pl.stock}</span> ס״מ
+                      {" · פחת "}{pl.wastePct}%
+                    </div>
+                  ))}
+                  {wallBuild.warnings.map(w => (
+                    <div key={w} style={{ color: 'var(--warn-fg)', fontSize: 12, marginTop: 6 }}>⚠ {w}</div>
+                  ))}
+
+                  <div className="t-meta" style={{ margin: "10px 0 5px" }}>פתיחת קוליסה על המשטח</div>
+                  <div className="row gap-2 wrap">
+                    {wallBuild.kulisot.map(k => (
+                      <button key={k.index} className="btn btn-sm"
+                        onClick={() => openFromWall(k.width, k.index)}>
+                        {k.index} · <span className="mono">{k.width}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* מחולל קוליסה */}
+      {panel === 'gen' && (
+        <div className="card" style={{ marginTop: 12, padding: 14 }}>
+          <div className="row between" style={{ marginBottom: 10 }}>
+            <span style={{ fontWeight: 700 }}>קוליסה חדשה ממידה</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPanel(null)}>✕</button>
+          </div>
+
+          <div className="row gap-2" style={{ marginBottom: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div className="t-meta" style={{ marginBottom: 4 }}>רוחב</div>
+              <input className="field" type="number" dir="ltr" style={{ height: 38 }}
+                value={gen.w} onChange={e => setGen(g => ({ ...g, w: Number(e.target.value) }))} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div className="t-meta" style={{ marginBottom: 4 }}>גובה</div>
+              <input className="field" type="number" dir="ltr" style={{ height: 38 }}
+                value={gen.h} onChange={e => setGen(g => ({ ...g, h: Number(e.target.value) }))} />
+            </div>
+          </div>
+
+          <div className="row gap-2 wrap" style={{ marginBottom: 10 }}>
+            {LIMITS_PREFERRED.map(w => (
+              <button key={w} className="btn btn-sm" onClick={() => setGen(g => ({ ...g, w }))}
+                style={{
+                  background: gen.w === w ? 'var(--gold)' : 'var(--card)',
+                  color: gen.w === w ? 'var(--on-gold)' : 'var(--ink70)',
+                  borderColor: gen.w === w ? 'var(--gold)' : 'var(--line)',
+                }}>{w}</button>
+            ))}
+          </div>
+
+          <div className="t-meta" style={{ marginBottom: 4 }}>חומר המסגרת</div>
+          <select className="field" style={{ height: 38, marginBottom: 10 }}
+            value={genMat?.id || ''} onChange={e => setGen(g => ({ ...g, matId: e.target.value }))}>
+            {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+
+          <div className="t-meta" style={{ marginBottom: 6 }}>חיזוקים פנימיים</div>
+          <div className="row gap-2 wrap" style={{ marginBottom: 10 }}>
+            {Array.from({ length: BRACE_MAX + 1 }, (_, n) => n).map(n => (
+              <button key={n} className="btn btn-sm" onClick={() => setGen(g => ({ ...g, braces: n }))}
+                style={{
+                  minWidth: 34,
+                  background: gen.braces === n ? 'var(--gold)' : 'var(--card)',
+                  color: gen.braces === n ? 'var(--on-gold)' : 'var(--ink70)',
+                  borderColor: gen.braces === n ? 'var(--gold)' : 'var(--line)',
+                }}>{n}</button>
+            ))}
+          </div>
+
+          <label className="row gap-2" style={{ marginBottom: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
+            <input type="checkbox" checked={gen.giben} style={{ marginTop: 3 }}
+              onChange={e => setGen(g => ({ ...g, giben: e.target.checked }))} />
+            <span>
+              <span style={{ fontWeight: 600 }}>2 גיבנים — עליון ותחתון</span>
+              <span className="muted" style={{ display: 'block', fontSize: 12 }}>
+                כל גיבן משתי לטות ⇒ 4 לטות. כך שי בונה.
+              </span>
+            </span>
+          </label>
+
+          {genResult.errors.length > 0 ? (
+            <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+              {genResult.errors.map(e => <div key={e}>✖ {e}</div>)}
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 10, marginBottom: 10, background: 'var(--gold-bg)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                {genResult.parts.length} חלקים · <span className="mono">{genMat?.name}</span>
+              </div>
+              <div className="t-meta">
+                2 אנכיות × <span className="mono">{gen.h}</span>
+                {genResult.plan.counts.gibens > 0
+                  ? <> · {genResult.plan.counts.gibens} גיבנים ({genResult.plan.counts.gibenMembers} לטות) × <span className="mono">{genResult.plan.inner}</span></>
+                  : <> · עליונה ותחתונה × <span className="mono">{genResult.plan.inner}</span></>}
+                {genResult.plan.braces.length > 0 && <> · {genResult.plan.braces.length} חיזוקים בגובה <span className="mono">{genResult.plan.braces.join(' / ')}</span></>}
+              </div>
+              {genResult.warnings.map(w => (
+                <div key={w} style={{ color: 'var(--warn-fg)', fontSize: 12, marginTop: 6 }}>⚠ {w}</div>
+              ))}
+            </div>
+          )}
+
+          <button className="btn btn-solid" style={{ width: '100%' }}
+            disabled={genResult.errors.length > 0} onClick={applyGen}>
+            {parts.length ? 'החלף את המשטח' : 'צור קוליסה'}
+          </button>
         </div>
       )}
 
@@ -410,6 +695,33 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
             <span className="t-meta mono">{dims.גובה}×{dims.רוחב}×{dims.עומק}</span>
           </div>
 
+          <div className="t-meta" style={{ marginBottom: 10 }}>
+            אורך הקנייה נבחר אוטומטית בטווח <span className="mono">{PURCHASE.min}–{PURCHASE.max}</span> ס״מ,
+            כדי לקנות כמה שפחות עץ. אפשר לנעול אורך ידנית.
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div className="t-meta" style={{ marginBottom: 6 }}>
+              רוחב החתך של המסור — המספר האמצעי שכתוב על הדיסק (למשל <span className="mono">250×3.2×30</span>)
+            </div>
+            <div className="row gap-2 wrap">
+              {KERF_OPTIONS.map(o => (
+                <button key={o.mm} className="btn btn-sm" title={o.note || undefined}
+                  onClick={() => pickKerf(o.mm)}
+                  style={{
+                    background: kerfMm === o.mm ? 'var(--gold)' : 'var(--card)',
+                    color: kerfMm === o.mm ? 'var(--on-gold)' : 'var(--ink70)',
+                    borderColor: kerfMm === o.mm ? 'var(--gold)' : 'var(--line)',
+                  }}>
+                  <span className="mono">{o.mm}</span> מ״מ
+                </button>
+              ))}
+            </div>
+            {KERF_OPTIONS.find(o => o.mm === kerfMm)?.note && (
+              <div className="t-meta" style={{ marginTop: 5 }}>{KERF_OPTIONS.find(o => o.mm === kerfMm).note}</div>
+            )}
+          </div>
+
           {plans.length === 0 ? (
             <div className="muted" style={{ fontSize: 13 }}>אין חלקים עם אורך.</div>
           ) : plans.map(p => (
@@ -417,16 +729,21 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
               <div className="row between gap-2" style={{ marginBottom: 6 }}>
                 <span style={{ fontWeight: 600, fontSize: 14 }}>{p.mat}</span>
                 <span className="row gap-2">
-                  <span className="t-meta">קורה</span>
+                  <span className="t-meta">{p.chosenLength === 'auto' ? 'קורה · מומלץ' : 'קורה'}</span>
                   <input className="field mono" type="number" dir="ltr"
                     style={{ height: 30, width: 74, padding: '0 8px' }}
                     value={stockOv[p.key] ?? p.stock}
                     onChange={e => setStockOv(s => ({ ...s, [p.key]: e.target.value }))} />
+                  {stockOv[p.key] != null && (
+                    <button className="btn btn-ghost btn-sm" title="חזרה לאורך המומלץ"
+                      onClick={() => setStockOv(s => { const { [p.key]: _, ...rest } = s; return rest })}>↺</button>
+                  )}
                 </span>
               </div>
 
               <div className="row gap-2 wrap" style={{ marginBottom: 8 }}>
-                <span className="chip chip-go">{p.barCount} קורות</span>
+                <span className="chip chip-go">{p.barCount}× <span className="mono">{p.stock}</span> ס״מ</span>
+                <span className="chip">סה״כ <span className="mono">{p.barCount * p.stock}</span> ס״מ</span>
                 <span className="chip" style={{ color: p.wastePct > 25 ? '#E5735B' : 'var(--ink70)' }}>
                   פחת {p.wastePct}% · {p.wasteCm} ס״מ
                 </span>
@@ -435,7 +752,8 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
               {/* ויזואליזציה של כל קורה */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {p.bars.map((b, i) => {
-                  const used = b.cuts.reduce((s, L) => s + L, 0)
+                  // כולל את רוחב המסור בין החיתוכים — אחרת השארית נראית גדולה מהאמת
+                  const used = b.cuts.reduce((s, L) => s + L, 0) + Math.max(0, b.cuts.length - 1) * p.kerf
                   return (
                     <div key={i} className="row gap-2">
                       <span className="mono t-meta" style={{ width: 22 }}>{i + 1}</span>
@@ -468,14 +786,14 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
           ))}
 
           <div className="t-meta" style={{ marginTop: 4, lineHeight: 1.7 }}>
-            הפס הכהה בסוף כל קורה הוא הפחת. חישוב כולל 3 מ״מ לרוחב המסור בין חיתוכים.
+            הפס הכהה בסוף כל קורה הוא הפחת. החישוב כולל <span className="mono">{kerfMm}</span> מ״מ לרוחב המסור בין חיתוכים.
           </div>
         </div>
       )}
 
       {sheet && (
         <DrawingSheet name={name} dims={dims} parts={parts} materials={materials}
-          stockOv={stockOv} onClose={() => setSheet(false)} />
+          stockOv={stockOv} kerfCm={mmToCm(kerfMm)} onClose={() => setSheet(false)} />
       )}
     </div>
   )

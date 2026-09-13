@@ -40,10 +40,16 @@ export function colorOf(part, materials) {
   return '#C4892A'
 }
 
-export const lenOf = (part, dims) => {
+// האורך האמיתי של החלק. מחזיר 0 כשהנוסחה לא תקינה — בלי להמציא ערך.
+// רשימת החיתוך והאימות משתמשים בזה.
+export const rawLenOf = (part, dims) => {
   const v = evalFormula(part.len, dims)
-  return v > 0 ? v : 8
+  return Number.isFinite(v) && v > 0 ? v : 0
 }
+
+// אורך לתצוגה בלבד. לחלק לא תקין נותנים 8 ס"מ כדי שיהיה גוף גלוי על המשטח
+// ואפשר יהיה לבחור ולתקן אותו. אסור להשתמש בזה לחישוב חיתוך או קנייה.
+export const lenOf = (part, dims) => rawLenOf(part, dims) || 8
 
 // מעבים חלקים דקים לצורך תצוגה בלבד — רשימת החיתוך משתמשת באורך האמיתי
 export function displayProfile(part, dims, materials) {

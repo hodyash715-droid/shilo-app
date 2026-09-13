@@ -4,7 +4,7 @@
 // קנה מידה אמיתי, טבלת חיתוך ומסגרת עם פרטי העבודה.
 // ============================================================
 
-import { lenOf, profileOf } from './geometry.js'
+import { lenOf, rawLenOf, profileOf } from './geometry.js'
 import { cutList, optimize } from './cuts.js'
 
 export const SHEET = { w: 297, h: 210, px: 5 }   // מ"מ · פיקסלים למ"מ
@@ -55,10 +55,12 @@ function bounds(boxes) {
 export function groupParts(parts, dims, materials) {
   const map = new Map()
   parts.forEach(p => {
-    const L = Math.round(lenOf(p, dims) * 10) / 10
+    // אורך אמיתי. חלק עם נוסחה שבורה מסומן ולא מקבל אורך מומצא —
+    // הנגר חייב לראות שיש בעיה, לא מספר שנראה תקין.
+    const L = Math.round(rawLenOf(p, dims) * 10) / 10
     const m = materials.find(x => x.id === p.invId)
     const key = `${p.invId}__${L}`
-    if (!map.has(key)) map.set(key, { key, mat: m?.name || p.name, len: L, qty: 0, ids: [] })
+    if (!map.has(key)) map.set(key, { key, mat: m?.name || p.name, len: L, qty: 0, ids: [], bad: !(L > 0) })
     const g = map.get(key)
     g.qty += 1; g.ids.push(p.id)
   })
@@ -70,7 +72,7 @@ export function groupParts(parts, dims, materials) {
 }
 
 // ---------- ציור ----------
-export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }) {
+export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {}, kerfCm }) {
   const P = SHEET.px
   canvas.width = SHEET.w * P
   canvas.height = SHEET.h * P
@@ -114,7 +116,7 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
 
   // ---- נתונים ----
   const { groups, byPart } = groupParts(parts, dims, materials)
-  const plans = optimize(cutList(parts, dims, materials), materials, stockOv)
+  const plans = optimize(cutList(parts, dims, materials), materials, stockOv, kerfCm)
 
   // ---- קנה מידה משותף לכל ההיטלים ----
   const fB = bounds(boxesFor('front', parts, dims, materials))
@@ -258,7 +260,8 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
     if (ry + rowH > T.y + T.h - 26) return
     num(g.no, colX[0].l + colX[0].w / 2, ry + 4.2, { size: 3 })
     txt(g.mat, colX[1].r - 1.5, ry + 4.2, { size: 2.9, max: colX[1].w - 3 })
-    num(g.len, colX[2].l + colX[2].w / 2, ry + 4.2, { size: 3 })
+    if (g.bad) txt('⚠ בדוק', colX[2].l + colX[2].w / 2, ry + 4.2, { size: 2.6, bold: true, align: 'center' })
+    else num(g.len, colX[2].l + colX[2].w / 2, ry + 4.2, { size: 3 })
     num(g.qty, colX[3].l + colX[3].w / 2, ry + 4.2, { size: 3, bold: true })
     ry += rowH
     line(T.x, ry, T.x + T.w, ry, THIN)
@@ -305,7 +308,9 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {} }
   // חתימת העסק בקצה
   txt('שילה — מיתוג והפקות', TB.x + 2, TB.y + 9, { size: 3.6, bold: true, align: 'left' })
   txt('שרטוט ייצור', TB.x + 2, TB.y + 15, { size: 2.7, color: '#666', align: 'left' })
-  txt('כל המידות בס״מ · לבדוק במקום לפני חיתוך', TB.x + 2, TB.y + 21, { size: 2.4, color: '#666', align: 'left' })
+  const kerfMm = Math.round((plans[0]?.kerf ?? 0) * 100) / 10
+  txt(`כל המידות בס״מ · לבדוק במקום לפני חיתוך · חושב עם מסור ${kerfMm} מ״מ`,
+    TB.x + 2, TB.y + 21, { size: 2.4, color: '#666', align: 'left' })
 
   return { ratio, groups, plans, totalBars }
 }

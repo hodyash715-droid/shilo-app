@@ -2,14 +2,14 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { drawSheet } from '../designer/drawing.js'
 
-export default function DrawingSheet({ name, dims, parts, materials, stockOv, onClose }) {
+export default function DrawingSheet({ name, dims, parts, materials, stockOv, kerfCm, onClose }) {
   const cvRef = useRef(null)
   const [info, setInfo] = useState(null)
   const [saveErr, setSaveErr] = useState('')
 
   useEffect(() => {
-    if (cvRef.current) setInfo(drawSheet(cvRef.current, { name, dims, parts, materials, stockOv }))
-  }, [name, dims, parts, materials, stockOv])
+    if (cvRef.current) setInfo(drawSheet(cvRef.current, { name, dims, parts, materials, stockOv, kerfCm }))
+  }, [name, dims, parts, materials, stockOv, kerfCm])
 
   const savePng = () => {
     try {
