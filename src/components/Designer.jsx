@@ -100,13 +100,22 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   partsRef.current = parts
   const marksRef = useRef(marks)
   marksRef.current = marks
+  const wallViewRef = useRef(wallView)
+  wallViewRef.current = wallView
 
   // ---- היסטוריה: בטל ----
   // ההיסטוריה מחזיקה גם חלקים וגם סימוני ברגים: מחיקת סימון בטעות
   // היא בדיוק הדבר שרוצים לבטל.
+  // ההיסטוריה מחזיקה חלקים, סימוני ברגים, וסידור הקיר. בלי הסידור,
+  // "בטל" אחרי גרירת קוליסה החזיר את החלקים למקומם אבל השאיר את
+  // הרשימה, התפרים והשלט על המצב שאחרי הגרירה — שני מצבים על מסך אחד.
   const snapshot = () => {
     const h = histRef.current
-    h.past.push(JSON.stringify({ p: partsRef.current, m: marksRef.current }))
+    const wv = wallViewRef.current
+    h.past.push(JSON.stringify({
+      p: partsRef.current, m: marksRef.current,
+      w: wv ? { layout: wv.layout || {}, joints: wv.joints || {} } : null,
+    }))
     if (h.past.length > 40) h.past.shift()
     setHistLen(h.past.length)
   }
@@ -114,10 +123,14 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     const h = histRef.current
     if (!h.past.length) return
     const prev = JSON.parse(h.past.pop())
-    partsRef.current = prev.p
     marksRef.current = prev.m || []
-    setParts(prev.p); setMarks(prev.m || [])
+    setMarks(prev.m || [])
     setSel(null); setGuides([]); setHistLen(h.past.length)
+    // על קיר, החלקים נגזרים מהסידור — מחזירים את הסידור ובונים מחדש,
+    // כדי שהרשימה, התפרים והמשטח יחזרו יחד.
+    if (prev.w && wallViewRef.current) { rebuildWall(prev.w.layout, prev.w.joints); return }
+    partsRef.current = prev.p
+    setParts(prev.p)
   }
 
   // ---- אינטראקציה: גרירת חלק / סיבוב תצוגה / זום ----
@@ -155,6 +168,26 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     }
 
     const id = hitTest(hitsRef.current, c.x, c.y)
+
+    // על קיר עובדים עם קוליסות, לא עם לטות: נגיעה בוחרת את הקוליסה
+    // כולה, וגרירה מזיזה אותה על הרצפה. הקושרות לא נגררות — הן
+    // שייכות לתפר, לא לקוליסה.
+    if (wallView && id) {
+      const part = parts.find(p => p.id === id)
+      const k = Number(part?.k) || 0
+      if (k) {
+        setSelK(k); setSel(null)
+        snapshot()
+        const cur = wallView.layout?.[k] || { dx: 0, dz: 0, deg: 0 }
+        dragRef.current = {
+          mode: 'group', k, lx: q.cx, ly: q.cy,
+          base: { dx: cur.dx || 0, dz: cur.dz || 0, deg: cur.deg || 0 },
+          acc: { dx: 0, dz: 0 },
+        }
+        return
+      }
+    }
+
     setSel(id)
     if (id) snapshot()
     dragRef.current = { mode: id ? 'part' : 'orbit', id, lx: q.cx, ly: q.cy }
@@ -183,6 +216,30 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
 
     if (d.mode === 'orbit') {
       setView(v => ({ ...v, yaw: v.yaw - dx * 0.01, pitch: Math.max(-1.2, Math.min(1.4, v.pitch + dy * 0.01)) }))
+      return
+    }
+
+    // גרירת קוליסה על הרצפה. תנועה אופקית של האצבע היא הציר שפונה
+    // ימינה במבט הנוכחי; תנועה אנכית היא הציר שפונה לעומק. חלק
+    // בודד נגרר גם למעלה-למטה, קוליסה לא — היא עומדת על הרצפה.
+    if (d.mode === 'group') {
+      const w = worldPerCss()
+      const { h, hs } = dragAxes(view)
+      const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw)
+      const v = h === 'x' ? 'z' : 'x'
+      const vs = h === 'x' ? (Math.sign(cy) || 1) : (Math.sign(sy) || 1)
+      // ככל שמסתכלים יותר מהצד, פיקסל אחד על המסך הוא יותר ס״מ לעומק.
+      // ממבט חזיתי ממש העומק לא נראה — מגבילים כדי שלא יברח לאינסוף.
+      const spRaw = Math.sin(view.pitch)
+      const sp = (Math.sign(spRaw) || 1) * Math.max(0.25, Math.abs(spRaw))
+      d.acc[h === 'x' ? 'dx' : 'dz'] += dx * w * hs
+      d.acc[v === 'x' ? 'dx' : 'dz'] += dy * w / sp * vs
+      const next = {
+        dx: Math.round((d.base.dx + d.acc.dx) * 10) / 10,
+        dz: Math.round((d.base.dz + d.acc.dz) * 10) / 10,
+        deg: d.base.deg,
+      }
+      rebuildWall({ ...(wallView?.layout || {}), [d.k]: next })
       return
     }
     if (!d.id) return
@@ -365,18 +422,26 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     applyLayout({ ...wallView.layout, [k]: next })
   }
 
-  const applyLayout = (layout, joints) => {
+  // בנייה מחדש של הקיר לפי סידור. בלי היסטוריה — הגרירה קוראת לזה
+  // בכל תזוזת אצבע, ורשומה אחת בהיסטוריה לכל גרירה היא מה שרוצים.
+  const rebuildWall = (layout, joints) => {
     const b = wallView.base
     const nextJoints = joints || wallView.joints || {}
     const r = wallLayout(b.widths, b.height,
       { ...wallOpts(b.prod), overlapCm: b.overlapCm }, layout, nextJoints)
-    if (!r.parts.length) return
-    snapshot()
+    if (!r.parts.length) return false
+    partsRef.current = r.parts
     setParts(r.parts)
     setWallView(w => ({
       ...w, layout, joints: nextJoints, groups: r.groups,
       seams: r.seams, bolts: r.bolts, koshret: r.koshret, koshretDropped: r.koshretDropped,
     }))
+    return true
+  }
+
+  const applyLayout = (layout, joints) => {
+    snapshot()
+    rebuildWall(layout, joints)
   }
 
   // קושרת בתפר ישר היא בחירה: "בניהם מחברים ברגים ולפעמים גם קושרות".
@@ -664,7 +729,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
       {wallView && (
         <div className="card" style={{ marginTop: 10, padding: 12 }}>
           <div className="t-meta" style={{ marginBottom: 7 }}>
-            הקוליסות בקיר — בחר אחת כדי להזיז או לפתוח אותה ככנף
+            הקוליסות בקיר — לחץ על אחת (כאן או על המשטח), גרור אותה על המשטח, או פתח אותה ככנף
           </div>
           <div className="row gap-2 wrap">
             {wallView.groups.map(g => {
