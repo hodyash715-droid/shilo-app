@@ -10,7 +10,7 @@
 //   layout — { [k]: { deg, dy, dx, dz } }, בדיוק כמו סידור ידני.
 // ============================================================
 
-import { LIMITS } from './rules.js'
+import { LIMITS, BALLAST } from './rules.js'
 import { arrangeSymmetric } from './wall.js'
 
 const r1 = n => Math.round(n * 10) / 10
@@ -80,6 +80,58 @@ export const TEMPLATES = [
   },
 
   {
+    id: 'gate-free',
+    name: 'שער עצמאי',
+    hint: 'שתי רגליים חלולות עם שקי חול בפנים — עומד בלי עיגון',
+    fields: ['width', 'height', 'leg', 'depth', 'inner', 'header', 'bags'],
+    // כל רגל היא תיבה סגורה של ארבע קוליסות:
+    //   חזית (קבלת קהל) · גב (יציאה) · צלע חיצונית · צלע פנימית
+    // הצלע הפנימית — זו שפונה אל הפתח — נמוכה יותר. שי, 16.9.2026.
+    // מעל הפתח: חזית, גב, ועוד אחת שוכבת שסוגרת מלמעלה כדי שלא
+    // ייראה עץ חשוף מלמעלה. בלעדיה רואים עץ — לפעמים מסתפקים בשתיים.
+    build: ({ width, height, leg, depth, inner, header, bags }) => {
+      const H = Math.max(20, Math.round(height || 240))
+      const L = clampW(leg || 60)
+      const D = clampW(depth || 60)
+      const IN = Math.max(10, Math.min(H, Math.round(inner || Math.round(H * 0.75))))
+      const HD = Math.max(10, Math.round(header || 60))
+      const opening = Math.max(1, Math.round(width) - 2 * L)
+      const half = Math.round(width) / 2
+
+      const rows = [], layout = {}
+      const put = (row, place) => { rows.push(row); layout[rows.length] = place }
+
+      // שתי רגליים. legX הוא מרכז הרגל; הצלעות יושבות על קצוותיה.
+      for (const side of [-1, 1]) {
+        const legX = side * (half - L / 2)
+        put({ width: L }, { at: { x: legX, z: 0 } })                              // חזית
+        put({ width: L }, { at: { x: legX, z: -D } })                             // גב
+        put({ width: D }, { deg: 90, at: { x: legX + side * L / 2, z: -D / 2 } }) // צלע חיצונית
+        put({ width: D, height: IN },
+            { deg: 90, at: { x: legX - side * L / 2, z: -D / 2 } })               // צלע פנימית, נמוכה
+      }
+
+      // מעל הפתח. פתח רחב מ-150 מתפצל לכמה חתיכות, כמו כל קיר.
+      let cursor = -opening / 2
+      const spans = split(opening).map(w => {
+        const c = r1(cursor + w / 2); cursor += w; return { w, c }
+      })
+      spans.forEach(sp => put({ width: sp.w, height: HD }, { at: { x: sp.c, y: H - HD / 2, z: 0 } }))
+      spans.forEach(sp => put({ width: sp.w, height: HD }, { at: { x: sp.c, y: H - HD / 2, z: -D } }))
+      // השוכבת שסוגרת מלמעלה. בלעדיה רואים עץ חשוף מלמעלה.
+      spans.forEach(sp => put({ width: sp.w, height: D },
+        { flat: true, at: { x: sp.c, y: H + 1, z: -D / 2 } }))
+
+      // 0 הוא בקשה מפורשת, לא "לא נמסר" — הוא נחסם לטווח ולא נבלע.
+      const asked = Math.round(Number(bags))
+      const perLeg = Number.isFinite(asked)
+        ? Math.max(BALLAST.perLegRange[0], Math.min(BALLAST.perLegRange[1], asked))
+        : BALLAST.perLeg
+      return { height: H, rows, layout, ballast: { perLeg, legs: 2, name: BALLAST.name } }
+    },
+  },
+
+  {
     id: 'booth',
     name: 'דוכן',
     hint: 'חזית נמוכה ושתי צלעות ב-90°',
@@ -100,6 +152,7 @@ export const TEMPLATE_DEFAULTS = {
   wings:    { width: 400, height: 240, wing: 60 },
   gate:     { width: 300, height: 240, leg: 60, header: 60 },
   booth:    { width: 200, height: 100, side: 40 },
+  'gate-free': { width: 270, height: 240, leg: 60, depth: 60, inner: 180, header: 60, bags: 5 },
 }
 
 export const FIELD_LABELS = {
@@ -109,6 +162,9 @@ export const FIELD_LABELS = {
   leg:    'רוחב רגל',
   header: 'גובה הכותרת',
   side:   'רוחב צלע',
+  depth:  'עומק הרגל',
+  inner:  'גובה הצלע הפנימית',
+  bags:   'שקי חול לרגל',
 }
 
 export const templateById = (id) => TEMPLATES.find(t => t.id === id) || null

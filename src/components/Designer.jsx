@@ -392,7 +392,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     }
   }
 
-  const showWallOnCanvas = (widths, wallH, overlapCm, seedLayout) => {
+  const showWallOnCanvas = (widths, wallH, overlapCm, seedLayout, ballast) => {
     if (parts.length && !confirm('פעולה זו מחליפה את כל החלקים שעל המשטח. להמשיך?')) return
     const base = { widths: widths.map(w => (w && typeof w === 'object' ? { ...w } : w)), height: Number(wallH), overlapCm, prod: prodNow() }
     // הסידור שהתבנית קבעה הוא נקודת הפתיחה, לא כלוב: משם ממשיכים
@@ -405,7 +405,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     setParts(r.parts)
     setSel(null); setSelK(null); setGuides([]); setPanel(null)
     setWallView({
-      base, layout, joints: {}, groups: r.groups,
+      base, layout, joints: {}, groups: r.groups, ballast: ballast || null, linear: r.linear,
       seams: r.seams, bolts: r.bolts, koshretDropped: r.koshretDropped,
       kulisot: r.kulisot, koshret: r.koshret, width: r.dims.רוחב,
     })
@@ -446,7 +446,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     partsRef.current = r.parts
     setParts(r.parts)
     setWallView(w => ({
-      ...w, layout, joints: nextJoints, groups: r.groups,
+      ...w, layout, joints: nextJoints, groups: r.groups, linear: r.linear,
       seams: r.seams, bolts: r.bolts, koshret: r.koshret, koshretDropped: r.koshretDropped,
     }))
     return true
@@ -514,17 +514,22 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   // איפה מבריגים, זו הכמות האמיתית ולא חישוב.
   const hardware = React.useMemo(() => {
     if (marks.length) {
-      return [{ name: JOINT.bolt, qty: marks.length, note: 'מסומנים בשרטוט' }]
+      return [{ name: JOINT.bolt, qty: marks.length, note: 'מסומנים בשרטוט' }, ...extra]
     }
-    const seams = wallView?.seams || []
-    if (!seams.length) return []
+    // משקולות: לא עץ, אבל בלעדיהן השער לא עומד.
+    const bal = wallView?.ballast
+    const extra = bal && bal.perLeg > 0 && bal.legs > 0
+      ? [{ name: bal.name, qty: bal.perLeg * bal.legs, note: `${bal.perLeg} לכל רגל` }]
+      : []
+    const seams = wallView?.linear === false ? [] : (wallView?.seams || [])
+    if (!seams.length) return extra
     const corners = seams.filter(x => x.corner).length
     return [{
       name: JOINT.bolt,
       qty: seams.reduce((n, x) => n + x.bolts, 0),
       note: corners ? `${seams.length} תפרים · ${corners} פינות` : `${seams.length} תפרים`,
-    }]
-  }, [marks.length, wallView?.seams])
+    }, ...extra]
+  }, [marks.length, wallView?.seams, wallView?.ballast])
 
   // ---- אימות: חלק שבור לא יגיע בשקט לרשימת החיתוך ----
   const dimCheckRaw = validateDims(dims)
@@ -548,7 +553,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     // קיר מסודר נשמר עם הסידור עצמו ולא רק עם התוצאה, כדי שאפשר
     // יהיה לפתוח אותו שוב ולהזיז כנף — ולא רק להסתכל עליה.
     const preview = isWall
-      ? { ...dims, kind: 'wall-layout', marks, wall: { ...wallView.base, layout: wallView.layout, joints: wallView.joints || {} } }
+      ? { ...dims, kind: 'wall-layout', marks, wall: { ...wallView.base, layout: wallView.layout, joints: wallView.joints || {}, ballast: wallView.ballast || null } }
       : { ...dims, marks }
     const saved = await onSave({ id: editId, name: nm, preview, parts, jobId })
     if (saved?.id) setEditId(saved.id)
@@ -564,6 +569,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
         kulisot: Array.isArray(k.parts) ? k.parts : [],
         overlapCm: k.preview.overlapCm,
         layout: k.preview.wall?.layout || null,
+        ballast: k.preview.wall?.ballast || null,
         jobId: k.job_id || null,
       })
       setPanel('wall')
@@ -588,7 +594,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
       if (r.parts.length) setParts(r.parts)
       setWallView(r.parts.length ? {
         base: { widths: w.widths, height: w.height, overlapCm: w.overlapCm, prod: w.prod },
-        layout: w.layout || {}, joints: w.joints || {}, groups: r.groups,
+        layout: w.layout || {}, joints: w.joints || {}, groups: r.groups, ballast: w.ballast || null, linear: r.linear,
         seams: r.seams, bolts: r.bolts, koshretDropped: r.koshretDropped,
         kulisot: r.kulisot, koshret: r.koshret, width: r.dims.רוחב,
       } : null)
@@ -738,7 +744,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
           }}>
             🏗️ קיר · <span className="mono">{wallView.kulisot}</span> קוליסות ·{' '}
             <span className="mono">{wallView.koshret}</span> קושרות
-            {wallView.bolts > 0 && <> · <span className="mono">{wallView.bolts}</span> ברגים</>}
+            {wallView.linear !== false && wallView.bolts > 0 && <> · <span className="mono">{wallView.bolts}</span> ברגים</>}
             {' '}· <span className="mono">{wallView.width}</span> ס״מ
           </div>
         )}
@@ -885,7 +891,20 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
             )
           })()}
 
-          {wallView.seams?.length > 0 && (
+          {wallView.ballast && (
+            <div style={{ fontSize: 12, marginTop: 10 }}>
+              🧱 <span className="mono">{wallView.ballast.perLeg * wallView.ballast.legs}</span>{' '}
+              {wallView.ballast.name} — <span className="mono">{wallView.ballast.perLeg}</span> בתוך כל רגל.
+            </div>
+          )}
+          {wallView.linear === false && (
+            <div style={{ fontSize: 12, marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 11, lineHeight: 1.7 }}>
+              🔩 במבנה הזה הקוליסות לא עומדות בשורה, ולכן אין שרשרת תפרים
+              לספור ממנה ברגים. סמן אותם על המשטח עם <b>🔩 ברגים</b> —
+              מה שתסמן הוא מה שייכנס לרשימה.
+            </div>
+          )}
+          {wallView.linear !== false && wallView.seams?.length > 0 && (
             <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 11 }}>
               <div className="t-meta" style={{ marginBottom: 6 }}>
                 חיבורים — ברגים בכל תפר (3–6), וקושרת לפי הצורך.

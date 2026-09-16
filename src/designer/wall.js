@@ -357,6 +357,15 @@ export function wallParts(widths, height, {
 
 // ציר הסיבוב של קוליסה: הקצה הפנימי שלה, זה שפונה למרכז הקיר.
 // כנף שמתקפלת סביב החיבור לשכנה לא משאירה חור בתפר.
+// מרכז התיבה החוסמת של קבוצה
+export function groupCenter(group) {
+  const mid = ax => {
+    const v = group.map(p => p.pos[ax])
+    return (Math.min(...v) + Math.max(...v)) / 2
+  }
+  return { x: mid('x'), y: mid('y'), z: mid('z') }
+}
+
 export function groupPivot(group) {
   if (!group.length) return { x: 0, z: 0 }
   const xs = group.map(p => p.pos.x), zs = group.map(p => p.pos.z)
@@ -398,7 +407,31 @@ export const normalizeT = (t = {}) => ({
   dz: Number(t.dz) || 0,
   dy: Math.max(0, Number(t.dy) || 0),
   deg: Number(t.deg) || 0,
+  flat: !!t.flat,
 })
+
+// קוליסה שוכבת: אותה מסגרת בדיוק, מונחת על הגב.
+// זה סיבוב של 90° סביב ציר אופקי, ובמודל שלנו הוא רק החלפת צירים —
+// לטה שרצה לגובה ('y') רצה עכשיו לעומק ('z') ולהפך. אין צורך במנוע
+// סיבוב כללי, והאורכים כמובן לא משתנים.
+// אחרי ההנחה הקוליסה יושבת על הרצפה ונמתחת אחורה; dy ו-dz מציבים אותה.
+export function layGroupFlat(parts, ids) {
+  const set = ids instanceof Set ? ids : new Set(ids)
+  if (!set.size) return parts
+  const mine = parts.filter(p => set.has(p.id))
+  if (!mine.length) return parts
+  const minZ = Math.min(...mine.map(p => p.pos.z))
+  const swap = { y: 'z', z: 'y' }
+  return parts.map(p => {
+    if (!set.has(p.id)) return p
+    return {
+      ...p,
+      axis: swap[p.axis] || p.axis,
+      flat: true,
+      pos: { ...p.pos, y: rr(p.pos.z - minZ), z: rr(-p.pos.y) },
+    }
+  })
+}
 
 // סיבוב והזזה של קבוצת חלקים סביב ציר נתון.
 export function transformGroup(parts, ids, { dx = 0, dz = 0, dy = 0, deg = 0 } = {}, pivot) {
@@ -435,13 +468,15 @@ export function transformGroup(parts, ids, { dx = 0, dz = 0, dy = 0, deg = 0 } =
 // באותה זווית סביב צירים שונים נפרדות זו מזו, והשוואת מספרים הייתה
 // מכריזה עליהן "ישר" ושולחת קושרת של 50 לגשר על מטר וחצי.
 export function seamsOf(count, layout = {}, joints = {}, geom = null) {
-  const at = k => normalizeT(layout[k])
+  const at = k => geom?.frames?.[k]?.t || normalizeT(layout[k])
 
   // האם התפר נשאר שלם: אותה זווית, ושתי הקוליסות ממפות את נקודת
   // התפר לאותו מקום בדיוק.
   const intact = (i) => {
     const a = at(i), b = at(i + 1)
     if (rr(b.deg - a.deg)) return false
+    // אחת שוכבת והשנייה עומדת — אין ביניהן מישור משותף.
+    if (a.flat !== b.flat) return false
     const fa = geom?.frames?.[i], fb = geom?.frames?.[i + 1]
     if (!fa || !fb) return a.dx === b.dx && a.dz === b.dz && a.dy === b.dy
     const p = { x: geom.seamXs?.[i - 1] ?? 0, y: 0, z: 0 }
@@ -481,7 +516,8 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
     return { ...base, groups: [], seams: [], corners: [], bolts: 0, koshretDropped: 0 }
   }
 
-  // המסגרות של כל קוליסה: הסידור שלה והציר שלה. התפרים נבחנים מולן.
+  // המסגרות של כל קוליסה: הסידור המלא שלה והציר שלה. נפתר פעם אחת,
+  // ומשמש גם לבדיקת התפרים, גם להזזת הקושרות וגם לחלקים עצמם.
   const frames = {}
   {
     const straight = new Map()
@@ -492,7 +528,28 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
       straight.get(k).push(p)
     }
     for (const [k, group] of straight) {
-      frames[k] = { t: normalizeT(layout[k]), pivot: groupPivot(group) }
+      let t = normalizeT(layout[k])
+      // המצב שממנו מודדים: אחרי השכבה, לפני הזזה.
+      const ids = group.map(p => p.id)
+      const rest = t.flat ? layGroupFlat(group, ids) : group
+      const pivot = groupPivot(rest)
+      // at = "שים את מרכז הקוליסה כאן". התבניות מדברות במיקומים
+      // ולא בהפרשים, ולכן הן לא צריכות לדעת איך נבנה הרצף הליניארי.
+      const at = layout[k]?.at
+      if (at) {
+        // מסובבים את כל החלקים ואז מודדים מרכז. סיבוב של מרכז התיבה
+        // אינו מרכז התיבה המסובבת — בזווית שאינה 90° זו סטייה של סנטימטר.
+        const c = groupCenter(rest.map(p => (
+          { ...p, pos: applyToPoint(p.pos, { deg: t.deg }, pivot) }
+        )))
+        t = {
+          ...t,
+          dx: rr(Number(at.x ?? c.x) - c.x),
+          dy: Math.max(0, rr(Number(at.y ?? c.y) - c.y)),
+          dz: rr(Number(at.z ?? c.z) - c.z),
+        }
+      }
+      frames[k] = { t, pivot, ids }
     }
   }
   const seams = seamsOf(base.kulisot, layout, joints, { frames, seamXs: base.seamXs })
@@ -509,15 +566,17 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
     byK.get(k).push(p)
   }
 
-  const [faceCm] = opts.material ? sectionOf(opts.material) : [2, 4]
+  const [faceCm, deepCm] = opts.material ? sectionOf(opts.material) : [2, 4]
 
   let parts = kept
-  for (const [k, group] of byK) {
-    if (!layout[k]) continue
-    const t = normalizeT(layout[k])
-    if (!t.dx && !t.dz && !t.dy && !t.deg) continue
-    // הציר נלקח מהמצב הישר, לפני כל סיבוב — לכן הוא יציב.
-    parts = transformGroup(parts, group.map(p => p.id), t, groupPivot(group))
+  for (const [k] of byK) {
+    const fr = frames[k]
+    if (!fr) continue
+    const { t, pivot, ids } = fr
+    if (!t.dx && !t.dz && !t.dy && !t.deg && !t.flat) continue
+    // קודם משכיבים, אחר כך מזיזים — אחרת ההזזה הייתה מתפרשת על הצירים הישנים.
+    if (t.flat) parts = layGroupFlat(parts, ids)
+    parts = transformGroup(parts, ids, t, pivot)
   }
 
   // קושרת שייכת לתפר. אם התפר נשאר שלם והקוליסות שלו זזו — הקושרת
@@ -526,7 +585,7 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
   for (const sm of seams) {
     if (sm.corner || !sm.koshret) continue
     const fr = frames[sm.between[0]]
-    if (!fr || (!fr.t.dx && !fr.t.dz && !fr.t.dy && !fr.t.deg)) continue
+    if (!fr || (!fr.t.dx && !fr.t.dz && !fr.t.dy && !fr.t.deg && !fr.t.flat)) continue
     parts = parts.map(p => (
       p.k === 0 && p.seam === sm.seam
         ? { ...p, yaw: (Number(p.yaw) || 0) + fr.t.deg * Math.PI / 180, pos: applyToPoint(p.pos, fr.t, fr.pivot) }
@@ -544,15 +603,34 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
       width: k === 0 ? null : widthOfGroup(group, faceCm),
       pivot: groupPivot(group),          // במצב הישר — יציב בין בנייה לבנייה
       moved: (() => {
-        if (!layout[k]) return false
-        const t = normalizeT(layout[k])
-        return !!(t.dx || t.dz || t.dy || t.deg)
+        const t = frames[k]?.t
+        return !!t && !!(t.dx || t.dz || t.dy || t.deg || t.flat)
       })(),
     }))
 
+  // המידות המוצגות הן מה שהמבנה באמת תופס, ולא סכום הרוחבים
+  // הליניארי. בשער עצמאי הקוליסות מסודרות בתיבה, והסכום הליניארי
+  // (930) לא מתאר שום דבר במציאות (270).
+  const span = (ax) => {
+    const v = parts.map(p => p.pos[ax])
+    return rr(Math.max(...v) - Math.min(...v) + faceCm)
+  }
+  const dims = parts.length ? {
+    ...base.dims,
+    רוחב: span('x'),
+    // הלטה העליונה שוכבת, ולכן חצי-הגובה שלה הוא הצלע הרחבה.
+    גובה: rr(Math.max(...parts.map(p => p.pos.y)) + deepCm / 2),
+    עומק: Math.max(base.dims.עומק, span('z')),
+  } : base.dims
+
   const koshret = kept.filter(p => p.k === 0).length
+  // מבנה שקוליסות בו הוצבו במיקום מוחלט (at) אינו שרשרת תפרים:
+  // בתיבה של שער עצמאי, "ק4–ק5" הן שתי רגליים נפרדות ואין ביניהן
+  // תפר כלל. ספירת ברגים משרשרת כזו היא מספר מומצא.
+  const linear = !Object.values(layout).some(t => t && t.at)
+
   return {
-    ...base, parts, groups, koshret, seams, corners,
+    ...base, dims, parts, groups, koshret, seams, corners, linear,
     bolts: seams.reduce((n, s) => n + s.bolts, 0),
     // כמה קושרות ירדו, כדי שאפשר יהיה להסביר את ההפרש ברשימת החיתוך
     koshretDropped: base.koshret - koshret,

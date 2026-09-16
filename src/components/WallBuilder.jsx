@@ -38,6 +38,8 @@ export default function WallBuilder({
   const [tplVals, setTplVals] = useState({})
   // הסידור שהתבנית קבעה. נשלח יחד עם הקיר, ומתאפס ברגע שנוגעים בשורות.
   const [seedLayout, setSeedLayout] = useState(initial?.layout || null)
+  // משקולות שהתבנית קבעה — שקי חול בתוך הרגליים של שער עצמאי
+  const [seedBallast, setSeedBallast] = useState(initial?.ballast || null)
 
   const pickTemplate = (id) => {
     setTplId(id)
@@ -52,6 +54,7 @@ export default function WallBuilder({
     if (out.rows.some(r => r.height)) setPerHeight(true)
     setHeight(out.height)
     setSeedLayout(Object.keys(out.layout).length ? out.layout : null)
+    setSeedBallast(out.ballast || null)
     if (!name.trim()) setName(`${t.name} ${out.height}×${out.rows.reduce((a, r) => a + r.width, 0)}`)
     setTplId(null)
   }
@@ -99,7 +102,7 @@ export default function WallBuilder({
 
   // סידור של תבנית תקף רק לשורות שהיא יצרה. ברגע שמוסיפים, מוחקים
   // או מזיזים שורה, המספרים מצביעים על קוליסות אחרות — והוא נמחק.
-  const dropSeed = () => setSeedLayout(null)
+  const dropSeed = () => { setSeedLayout(null); setSeedBallast(null) }
   const set = (id, width) => setKulisot(ks => ks.map(k => k.id === id ? { ...k, width } : k))
   const add = (w) => { dropSeed(); setKulisot(ks => [...ks, mk(w ?? ks.at(-1)?.width ?? 120)]) }
   const dup = (id) => { dropSeed(); setKulisot(ks => {
@@ -132,6 +135,7 @@ export default function WallBuilder({
         typeof sp === 'object' ? { width: sp.width, height: sp.height } : { width: sp }
       )),
       layout: seedLayout,
+      ballast: seedBallast,
       overlapCm: overlap,
       totalWidth: total,
       jobId,
@@ -392,7 +396,7 @@ export default function WallBuilder({
 
       <div className="row gap-2" style={{ marginTop: 12 }}>
         <button className="btn btn-solid grow" disabled={!wall}
-          onClick={() => onShowWall?.(specs, Number(height), overlap, seedLayout)}>
+          onClick={() => onShowWall?.(specs, Number(height), overlap, seedLayout, seedBallast)}>
           🏗️ הצג את הקיר על המשטח
         </button>
       </div>

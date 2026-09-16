@@ -67,6 +67,16 @@ export const CORNER = {
   status: 'verified',
 }
 
+// ---- משקולות לשער עצמאי ----
+// שי, 16.9.2026: "שקי חול, הכמות משתנה בדרך כלל בין 4 ל-6 לכל רגל".
+// הן יושבות בתוך הרגל החלולה ומחזיקות את השער עומד.
+export const BALLAST = {
+  name: 'שק חול',
+  perLeg: 5,
+  perLegRange: [4, 6],
+  status: 'verified',
+}
+
 export const koshretLength = (overlapCm = KOSHRET.overlapCm) =>
   Math.round(Number(overlapCm) * 2 * 10) / 10
 
