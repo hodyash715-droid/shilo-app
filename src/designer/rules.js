@@ -48,8 +48,9 @@ export const KOSHRET = {
 export const JOINT = {
   bolt: 'בורג 4.2 שחור',        // אושר 16.9.2026. האורך עדיין לא נמסר.
   boltLenStatus: 'unknown',
-  bolts: 3,                     // אושר לפינה. לתפר ישר טרם נמסר מספר —
-  boltsStatus: 'assumption',    // מניחים אותו מספר עד שיימסר אחרת.
+  bolts: 3,                     // ברירת מחדל
+  boltsRange: [3, 6],           // שי, 16.9.2026: "משתנה בין 3-6 ברגים"
+  boltsStatus: 'verified',
   koshretByDefault: true,       // תפר ישר מקבל קושרות, אפשר לבטל ידנית
   status: 'verified',
 }

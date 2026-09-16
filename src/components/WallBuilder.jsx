@@ -11,7 +11,7 @@ import { LIMITS_PREFERRED, sectionOf } from '../designer/kulisa.js'
 import { optimize } from '../designer/cuts.js'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
-const mk = (width) => ({ id: uid(), width: String(width ?? '') })
+const mk = (width, height) => ({ id: uid(), width: String(width ?? ''), height: String(height ?? '') })
 const num = (v) => (String(v).trim() === '' ? NaN : Number(v))
 
 export default function WallBuilder({
@@ -21,15 +21,30 @@ export default function WallBuilder({
   const [name, setName] = useState(initial?.name || '')
   const [height, setHeight] = useState(initial?.height || 240)
   const [kulisot, setKulisot] = useState(
-    initial?.kulisot?.length ? initial.kulisot.map(k => mk(k.width)) : [mk(120), mk(120)]
+    initial?.kulisot?.length ? initial.kulisot.map(k => mk(k.width, k.height)) : [mk(120), mk(120)]
   )
   const [overlap, setOverlap] = useState(initial?.overlapCm || KOSHRET.overlapCm)
   const [jobId, setJobId] = useState(initial?.jobId || null)
   const [target, setTarget] = useState(540)
+  // גובה לכל קוליסה. כבוי = קיר ישר בגובה אחיד, וזה הרוב המוחלט.
+  // דלוק = שער: רגליים גבוהות וכותרת נמוכה מעליהן.
+  const [perHeight, setPerHeight] = useState(
+    () => !!initial?.kulisot?.some(k => Number(k.height) > 0)
+  )
   const [view, setView] = useState('build')   // build | cuts | load
 
   const widths = kulisot.map(k => num(k.width))
   const total = widths.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0)
+  // מספר = רוחב בלבד; אובייקט = גם גובה משלו
+  const specs = kulisot.map(k => {
+    const w = num(k.width)
+    const h = perHeight ? num(k.height) : NaN
+    return h > 0 ? { width: w, height: h } : w
+  })
+  const tallest = Math.max(
+    Number(height) || 0,
+    ...(perHeight ? kulisot.map(k => num(k.height)).filter(h => h > 0) : [0])
+  )
 
   // הרוחב המינימלי שמסגרת יכולה להיבנות בו: שתי אנכיות ועוד משהו ביניהן.
   const minWidth = material ? sectionOf(material)[0] * 2 : 0
@@ -39,14 +54,19 @@ export default function WallBuilder({
     if (!Number.isFinite(v) || v <= 0) return 'רוחב חייב להיות חיובי'
     if (v > LIMITS.maxWidth) return `מעל ${LIMITS.maxWidth} — פצל לשתי קוליסות`
     if (v <= minWidth) return `צר מדי למסגרת (מינימום ${minWidth + 1})`
+    if (perHeight && String(k.height).trim() !== '') {
+      const h = num(k.height)
+      if (!Number.isFinite(h) || h <= 0) return 'גובה חייב להיות חיובי'
+      if (h > LIMITS.maxHeight) return `גובה ${h} מעל המקסימום (${LIMITS.maxHeight})`
+    }
     return null
   }
   const bad = kulisot.filter(k => rowError(k))
 
   const wall = useMemo(() => {
     if (bad.length || !kulisot.length || !(height > 0) || !material) return null
-    return assembleWall(widths, Number(height), { material, materials, braces, giben, overlapCm: overlap })
-  }, [widths.join(','), height, material, materials, braces, giben, overlap, bad.length])
+    return assembleWall(specs, Number(height), { material, materials, braces, giben, overlapCm: overlap })
+  }, [JSON.stringify(specs), height, material, materials, braces, giben, overlap, bad.length])
 
   const plans = useMemo(
     () => (wall ? optimize(wall.rows, materials, {}, kerfCm) : []),
@@ -80,7 +100,9 @@ export default function WallBuilder({
     onSaveWall?.({
       name: name.trim() || `קיר ${total}×${height}`,
       height: Number(height),
-      kulisot: widths.map(width => ({ width: Number(width) })),
+      kulisot: specs.map(sp => (
+        typeof sp === 'object' ? { width: sp.width, height: sp.height } : { width: sp }
+      )),
       overlapCm: overlap,
       totalWidth: total,
       jobId,
@@ -154,6 +176,7 @@ export default function WallBuilder({
         {(wall ? wall.connections.length : kulisot.length - 1) > 1 &&
           <> · <span className="mono">{wall ? wall.connections.length : kulisot.length - 1}</span> תפרים</>}
         {wall && <> · <span className="mono">{wall.koshret.count}</span> קושרות של <span className="mono">{wall.koshret.lengthCm}</span></>}
+        {perHeight && tallest > Number(height) && <> · גובה עד <span className="mono">{tallest}</span></>}
         <br />לכל קוליסה: <span className="mono">{braces}</span> חיזוקים · גיבן {giben ? 'כן' : 'לא'} — נקבע במסך הקוליסה
       </div>
 
@@ -166,6 +189,16 @@ export default function WallBuilder({
       {/* ---------- הרכבה ---------- */}
       {view === 'build' && (
         <>
+          <div className="row between" style={{ marginBottom: 7 }}>
+            <span className="t-meta">{perHeight ? 'רוחב וגובה לכל קוליסה' : 'רוחב לכל קוליסה'}</span>
+            <button className="btn btn-sm" onClick={() => setPerHeight(v => !v)}
+              title="גובה שונה לכל קוליסה — כך בונים שער"
+              style={{
+                background: perHeight ? 'var(--gold-bg)' : 'var(--card)',
+                color: perHeight ? 'var(--gold-fg)' : 'var(--ink45)',
+                borderColor: perHeight ? 'var(--gold)' : 'var(--line)',
+              }}>⇕ גבהים שונים</button>
+          </div>
           <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
             {kulisot.map((k, i) => {
               const err = rowError(k)
@@ -177,6 +210,13 @@ export default function WallBuilder({
                     placeholder="רוחב"
                     style={{ height: 34, flex: 1, minWidth: 0, borderColor: err ? 'var(--danger)' : undefined }}
                     value={k.width} onChange={e => set(k.id, e.target.value)} />
+                  {perHeight && (
+                    <input className="field mono" type="number" inputMode="decimal" dir="ltr"
+                      placeholder={String(height)} title="גובה הקוליסה"
+                      style={{ height: 34, flex: 1, minWidth: 0, borderColor: err ? 'var(--danger)' : undefined }}
+                      value={k.height}
+                      onChange={e => setKulisot(ks => ks.map(x => x.id === k.id ? { ...x, height: e.target.value } : x))} />
+                  )}
                   <span className="row gap-1" dir="ltr" style={{ flex: '0 0 auto' }}>
                     <button className="btn btn-sm" title="הזז שמאלה" style={{ minWidth: 38 }}
                       onClick={() => move(k.id, -1)} disabled={i === 0}>‹</button>
@@ -283,7 +323,7 @@ export default function WallBuilder({
 
       <div className="row gap-2" style={{ marginTop: 12 }}>
         <button className="btn btn-solid grow" disabled={!wall}
-          onClick={() => onShowWall?.(widths, Number(height), overlap)}>
+          onClick={() => onShowWall?.(specs, Number(height), overlap)}>
           🏗️ הצג את הקיר על המשטח
         </button>
       </div>
@@ -298,7 +338,7 @@ export default function WallBuilder({
           <div className="row gap-2 wrap">
             {wall.kulisot.map(k => (
               <button key={k.index} className="btn btn-sm"
-                onClick={() => onOpenKulisa?.(k.width, k.index, Number(height))}>
+                onClick={() => onOpenKulisa?.(k.width, k.index, k.height || Number(height))}>
                 {k.index} · <span className="mono">{k.width}</span>
               </button>
             ))}

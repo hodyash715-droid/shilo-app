@@ -5,7 +5,7 @@ import { materialsFor, pickable } from '../designer/materials.js'
 import { generateKulisa, defaultFrameMaterial, BRACE_MAX, BRACE_DEFAULT, LIMITS_PREFERRED } from '../designer/kulisa.js'
 import { validateDims, invalidParts, tooLongParts, JOINT } from '../designer/rules.js'
 import WallBuilder from './WallBuilder.jsx'
-import { wallLayout, applyToPoint, unapplyFromPoint } from '../designer/wall.js'
+import { wallLayout, applyToPoint, unapplyFromPoint, normalizeT } from '../designer/wall.js'
 import DrawingSheet from './DrawingSheet.jsx'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -68,7 +68,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   // הציר והסידור של הקוליסה שעליה יושב הסימון
   const markFrame = (k) => {
     const g = wallView?.groups?.find(x => x.k === k)
-    return g ? { t: wallView.layout?.[k] || {}, pivot: g.pivot } : null
+    return g ? { t: normalizeT(wallView.layout?.[k]), pivot: g.pivot } : null
   }
   // הסימון במקומו האמיתי על המשטח
   const markWorld = (m) => {
@@ -392,7 +392,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
 
   const showWallOnCanvas = (widths, wallH, overlapCm) => {
     if (parts.length && !confirm('פעולה זו מחליפה את כל החלקים שעל המשטח. להמשיך?')) return
-    const base = { widths: [...widths], height: Number(wallH), overlapCm, prod: prodNow() }
+    const base = { widths: widths.map(w => (w && typeof w === 'object' ? { ...w } : w)), height: Number(wallH), overlapCm, prod: prodNow() }
     const r = wallLayout(base.widths, base.height, { ...wallOpts(base.prod), overlapCm }, {}, {})
     if (!r.parts.length) return
     snapshot()
@@ -413,13 +413,21 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   // ומהסידור המצטבר, כדי ששום לחיצה לא תיפול על תוצאה של קודמתה.
   const arrange = (k, delta) => {
     if (!wallView) return
-    const cur = wallView.layout[k] || { dx: 0, dz: 0, deg: 0 }
+    const cur = wallView.layout[k] || { dx: 0, dz: 0, dy: 0, deg: 0 }
     const next = {
-      dx: r1(cur.dx + (delta.dx || 0)),
-      dz: r1(cur.dz + (delta.dz || 0)),
-      deg: r1(cur.deg + (delta.deg || 0)),
+      dx: r1((cur.dx || 0) + (delta.dx || 0)),
+      dz: r1((cur.dz || 0) + (delta.dz || 0)),
+      // הרמה לא יורדת מתחת לרצפה — קוליסה תלויה באוויר שלילי היא שטות
+      dy: Math.max(0, r1((cur.dy || 0) + (delta.dy || 0))),
+      deg: r1((cur.deg || 0) + (delta.deg || 0)),
     }
     applyLayout({ ...wallView.layout, [k]: next })
+  }
+
+  // מספר הברגים בתפר. שי: משתנה בין 3 ל-6 לפי הצורך.
+  const setSeamBolts = (seam, n) => {
+    const cur = (wallView.joints || {})[seam] || {}
+    applyLayout(wallView.layout, { ...(wallView.joints || {}), [seam]: { ...cur, bolts: n } })
   }
 
   // בנייה מחדש של הקיר לפי סידור. בלי היסטוריה — הגרירה קוראת לזה
@@ -763,7 +771,9 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
                     {g?.label}{g?.width != null && <> · <span className="mono">{g.width}</span> ס״מ</>}
                   </span>
                   <span className="t-meta mono">
-                    {t.deg ? `${t.deg}°` : 'ישר'}{(t.dx || t.dz) ? ` · ${t.dx}/${t.dz}` : ''}
+                    {t.deg ? `${t.deg}°` : 'ישר'}
+                    {(t.dx || t.dz) ? ` · ${t.dx}/${t.dz}` : ''}
+                    {t.dy ? ` · מורמת ${t.dy}` : ''}
                   </span>
                 </div>
 
@@ -798,7 +808,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
                     onClick={() => arrange(selK, { dx: +stepCm })}>→ ימינה</button>
                 </div>
                 <div className="t-meta" style={{ marginBottom: 4 }}>צעד ההזזה (ס״מ)</div>
-                <div className="row gap-2" dir="ltr">
+                <div className="row gap-2" dir="ltr" style={{ marginBottom: 8 }}>
                   {[5, 10, 25, 50].map(c => (
                     <button key={c} className="btn btn-sm mono" onClick={() => setStepCm(c)}
                       style={{
@@ -810,9 +820,22 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
                   ))}
                 </div>
 
+                <div className="t-meta" style={{ marginBottom: 4 }}>
+                  גובה מהרצפה — כך מרימים כותרת של שער
+                </div>
+                <div className="row gap-2" dir="ltr">
+                  <button className="btn btn-sm" style={small}
+                    onClick={() => arrange(selK, { dy: -stepCm })} disabled={!t.dy}>▼ הורד</button>
+                  <span className="mono t-meta" style={{
+                    flex: '1 1 0', textAlign: 'center', alignSelf: 'center',
+                  }}>{t.dy ? `${t.dy} ס״מ` : 'על הרצפה'}</span>
+                  <button className="btn btn-sm" style={small}
+                    onClick={() => arrange(selK, { dy: +stepCm })}>▲ הרם</button>
+                </div>
+
                 <div className="row gap-2" style={{ marginTop: 10 }}>
                   <button className="btn btn-sm grow" disabled={!g?.moved}
-                    onClick={() => applyLayout({ ...wallView.layout, [selK]: { dx: 0, dz: 0, deg: 0 } })}>
+                    onClick={() => applyLayout({ ...wallView.layout, [selK]: { dx: 0, dz: 0, dy: 0, deg: 0 } })}>
                     ↺ החזר את {g?.label} למקום
                   </button>
                 </div>
@@ -823,27 +846,44 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
           {wallView.seams?.length > 0 && (
             <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 11 }}>
               <div className="t-meta" style={{ marginBottom: 6 }}>
-                חיבורים — ברגים בכל תפר. קושרת אפשר להוסיף או להוריד.
+                חיבורים — ברגים בכל תפר (3–6), וקושרת לפי הצורך.
               </div>
-              <div className="row gap-2 wrap">
-                {wallView.seams.map(sm => (
-                  <button key={sm.seam} className="btn btn-sm"
-                    disabled={!sm.canToggleKoshret}
-                    onClick={() => sm.canToggleKoshret && toggleKoshret(sm.seam, !sm.koshret)}
-                    style={{
-                      minHeight: 34, fontSize: 12,
-                      background: sm.koshret ? 'var(--gold-bg)' : 'var(--card)',
-                      color: sm.corner ? 'var(--ink45)' : (sm.koshret ? 'var(--gold-fg)' : 'var(--ink70)'),
-                      borderColor: sm.koshret ? 'var(--gold)' : 'var(--line)',
-                      opacity: sm.canToggleKoshret ? 1 : .75,
-                    }}>
-                    ק{sm.between[0]}–ק{sm.between[1]} ·{' '}
-                    🔩<span className="mono">{sm.bolts}</span>
-                    {sm.corner
-                      ? <> · פינה{sm.angle ? <> <span className="mono">{Math.abs(sm.angle)}°</span></> : null}</>
-                      : <> · {sm.koshret ? 'קושרות ✓' : 'בלי קושרות'}</>}
-                  </button>
-                ))}
+              <div style={{ display: 'grid', gap: 6 }}>
+                {wallView.seams.map(sm => {
+                  const [lo, hi] = sm.boltsRange || [3, 6]
+                  return (
+                    <div key={sm.seam} className="row gap-2" style={{ fontSize: 12 }}>
+                      <span style={{ fontWeight: 700, flex: '0 0 auto', minWidth: 52 }}>
+                        ק{sm.between[0]}–ק{sm.between[1]}
+                      </span>
+                      <span className="row gap-1" dir="ltr" style={{ flex: '0 0 auto' }}>
+                        <button className="btn btn-sm" style={{ minHeight: 32, minWidth: 30 }}
+                          disabled={sm.bolts <= lo}
+                          onClick={() => setSeamBolts(sm.seam, sm.bolts - 1)}>−</button>
+                        <span className="mono" style={{ minWidth: 34, textAlign: 'center', alignSelf: 'center' }}>
+                          🔩{sm.bolts}
+                        </span>
+                        <button className="btn btn-sm" style={{ minHeight: 32, minWidth: 30 }}
+                          disabled={sm.bolts >= hi}
+                          onClick={() => setSeamBolts(sm.seam, sm.bolts + 1)}>+</button>
+                      </span>
+                      <button className="btn btn-sm"
+                        disabled={!sm.canToggleKoshret}
+                        onClick={() => toggleKoshret(sm.seam, !sm.koshret)}
+                        style={{
+                          minHeight: 32, fontSize: 12, flex: 1,
+                          background: sm.koshret ? 'var(--gold-bg)' : 'var(--card)',
+                          color: sm.corner ? 'var(--ink45)' : (sm.koshret ? 'var(--gold-fg)' : 'var(--ink70)'),
+                          borderColor: sm.koshret ? 'var(--gold)' : 'var(--line)',
+                          opacity: sm.canToggleKoshret ? 1 : .75,
+                        }}>
+                        {sm.corner
+                          ? <>פינה{sm.angle ? <> <span className="mono">{Math.abs(sm.angle)}°</span></> : null}</>
+                          : <>{sm.koshret ? 'קושרות ✓' : 'בלי קושרות'}</>}
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
               <div className="t-meta" style={{ marginTop: 7, lineHeight: 1.6 }}>
                 סה״כ <span className="mono">{wallView.bolts}</span> × {JOINT.bolt} ·{' '}
@@ -1051,7 +1091,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
                       : k.preview?.kind === 'wall-layout'
                       // קיר מסודר: parts הם החלקים עצמם, ומספר הקוליסות בא מהסידור
                       ? <>🏗️ {(k.preview?.wall?.widths || []).length} קוליסות{
-                          Object.values(k.preview?.wall?.layout || {}).some(t => t?.deg || t?.dx || t?.dz) && ' · עם כנפיים'
+                          Object.values(k.preview?.wall?.layout || {}).some(t => t?.deg || t?.dx || t?.dz || t?.dy) && (Object.values(k.preview?.wall?.layout || {}).some(t => t?.deg) ? ' · עם כנפיים' : ' · מסודר')
                         } · <span className="mono">{k.preview?.רוחב}×{k.preview?.גובה}</span></>
                       : <>{(k.parts || []).length} חלקים · <span className="mono">{k.preview?.גובה}×{k.preview?.רוחב}</span></>}
                   </div>

@@ -68,6 +68,15 @@ export function generateKulisa({ width, height, depth = 40, material, braces = B
       errors: [`רוחב ${dims.רוחב} קטן מדי לשתי אנכיות של ${material.name}`],
     }
   }
+  // שתי האופקיות צריכות מקום זו מעל זו. מתחת לזה אין מסגרת אלא ערימה,
+  // והחלקים יוצאים אל מחוץ לגובה שביקשו.
+  const minH = r1(2 * ph)
+  if (dims.גובה <= minH) {
+    return {
+      parts: [], plan: null, warnings,
+      errors: [`גובה ${dims.גובה} קטן מדי — ${material.name} דורש לפחות ${r1(minH + 1)}`],
+    }
+  }
 
   const lenH = `{רוחב}-${r1(2 * pw)}`           // נוסחה — תתעדכן עם שינוי הרוחב
   const mk = (name, axis, len, pos) => ({ id: uid(), invId: material.id, name, axis, len, pos })
