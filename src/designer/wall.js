@@ -97,7 +97,9 @@ export function wallProposals(width, height, opts = {}) {
   const minCount = Math.ceil(W / maxW)
   const found = []
 
-  // 1. הכי מעט קוליסות, ואז הכי מעט מידות שונות.
+  // 1. הצירוף הקצר ביותר ממידות סטנדרטיות.
+  // שים לב: זה לא בהכרח הכי מעט קוליסות בסך הכל — חלוקה שווה
+  // במידה חריגה יכולה לתת פחות. לכן הכותרת מדברת על המידות.
   const combos = standardCombos(W, preferred)
   if (combos.length) {
     const best = combos.slice().sort((a, b) =>
@@ -105,7 +107,7 @@ export function wallProposals(width, height, opts = {}) {
       new Set(a).size - new Set(b).size ||
       Math.max(...b) - Math.max(...a)
     )[0]
-    found.push(proposal('fewest', 'הכי מעט קוליסות', best, preferred))
+    found.push(proposal('standard', 'מידות סטנדרטיות', best, preferred))
 
     // 2. הצירוף הסטנדרטי עם הכי מעט מידות שונות, אם הוא אחר.
     const simplest = combos.slice().sort((a, b) =>
@@ -128,7 +130,9 @@ export function wallProposals(width, height, opts = {}) {
 
   // הסרת כפילויות — אותה חלוקה בדיוק לא צריכה להופיע פעמיים.
   const seen = new Set()
-  const proposals = found.filter(p => {
+  const proposals = found
+    .sort((a, b) => a.widths.length - b.widths.length)
+    .filter(p => {
     const key = p.widths.join('|')
     if (seen.has(key)) return false
     seen.add(key)

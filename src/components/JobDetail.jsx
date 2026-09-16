@@ -332,12 +332,12 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
           {onDesign && (
             <>
               <div className="row between" style={{ margin: '18px 0 8px' }}>
-                <div className="t-meta">תכנון קוליסות</div>
+                <div className="t-meta">תכנון</div>
                 <button className="btn btn-sm" onClick={() => onDesign(job.id, null)}>＋ קוליסה</button>
               </div>
               {jobKool.length === 0 ? (
                 <div className="muted" style={{ fontSize: 13, marginBottom: 18 }}>
-                  אין עדיין קוליסה מתוכננת לעבודה הזאת.
+                  אין עדיין קוליסה או קיר מתוכננים לעבודה הזאת.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
@@ -350,7 +350,9 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
                       <span style={{ minWidth: 0 }}>
                         <span style={{ fontWeight: 600, fontSize: 14, display: 'block' }} className="truncate">{k.name}</span>
                         <span className="t-meta">
-                          {(k.parts || []).length} חלקים · <span className="mono">{k.preview?.גובה}×{k.preview?.רוחב}</span>
+                          {k.preview?.kind === 'wall'
+                            ? <>🏗️ {(k.parts || []).length} קוליסות · <span className="mono">{k.preview?.רוחב}×{k.preview?.גובה}</span></>
+                            : <>{(k.parts || []).length} חלקים · <span className="mono">{k.preview?.גובה}×{k.preview?.רוחב}</span></>}
                         </span>
                       </span>
                       <span className="t-meta">פתח במעצב ←</span>

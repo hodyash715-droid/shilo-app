@@ -425,9 +425,8 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
         </div>
       )}
 
-      {/* הרכבת קיר */}
-      {panel === 'wall' && (
-        <div className="card" style={{ marginTop: 12, padding: 14 }}>
+      {/* הרכבת קיר — נשאר מחובר גם כשסוגרים, אחרת הקיר שנבנה אובד */}
+      <div className="card" hidden={panel !== 'wall'} style={{ marginTop: 12, padding: 14 }}>
           <div className="row between" style={{ marginBottom: 4 }}>
             <span style={{ fontWeight: 700 }}>קיר — הרכבה מקוליסות</span>
             <button className="btn btn-ghost btn-sm" onClick={() => { setPanel(null); setWallInit(null); wallIdRef.current = null }}>✕</button>
@@ -446,9 +445,10 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
             initial={wallInit}
             onOpenKulisa={openFromWall}
             onSaveWall={saveWall}
+            onNewWall={() => { wallIdRef.current = null; setWallInit(null) }}
           />
-        </div>
-      )}
+      </div>
+
       {/* מחולל קוליסה */}
       {panel === 'gen' && (
         <div className="card" style={{ marginTop: 12, padding: 14 }}>
