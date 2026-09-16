@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { DIMS, render, hitTest, hitFace, pointOnFace, markAt, lenOf, worldPerPixel, dragAxes, snapAlong } from '../designer/geometry.js'
+import { DIMS, render, hitTest, hitFace, pointOnFace, markAt, lenOf, profileOf, worldPerPixel, dragAxes, snapAlong } from '../designer/geometry.js'
 import { cutList, optimize, DEFAULT_STOCK, PURCHASE, KERF_OPTIONS, DEFAULT_KERF_MM, mmToCm } from '../designer/cuts.js'
 import { materialsFor, pickable } from '../designer/materials.js'
 import { generateKulisa, defaultFrameMaterial, BRACE_MAX, BRACE_DEFAULT, LIMITS_PREFERRED } from '../designer/kulisa.js'
@@ -7,6 +7,7 @@ import { validateDims, invalidParts, tooLongParts, JOINT } from '../designer/rul
 import WallBuilder from './WallBuilder.jsx'
 import { wallLayout, applyToPoint, unapplyFromPoint, normalizeT } from '../designer/wall.js'
 import DrawingSheet from './DrawingSheet.jsx'
+import StudioRoom from './StudioRoom.jsx'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const AXES = [
@@ -56,6 +57,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     try { localStorage.setItem('shilo:kerfMm', String(mm)) } catch { /* מצב פרטי — לא נורא */ }
   }
   const [sheet, setSheet] = useState(false)
+  const [studioOpen, setStudioOpen] = useState(false)
   const [guides, setGuides] = useState([])
   const [snapOn, setSnapOn] = useState(true)
   const histRef = useRef({ past: [], future: [] })
@@ -452,6 +454,32 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     rebuildWall(layout, joints)
   }
 
+  // The studio edits the same state as the canvas, including wall height and
+  // hinge rotation. A drag commits once, so Undo restores the whole gesture.
+  const studioSelect = selection => {
+    setSelK(selection?.k ?? null)
+    setSel(selection?.id ?? null)
+  }
+  const studioTransform = (selection, delta) => {
+    if (wallView) {
+      if (selection?.k > 0) arrange(selection.k, delta)
+      return
+    }
+    const part = parts.find(p => p.id === selection?.id)
+    if (!part) return
+    snapshot()
+    const [, wide] = profileOf(part, materials)
+    const halfHeight = part.axis === 'y' ? lenOf(part, dims) / 2 : wide / 2
+    const next = parts.map(p => p.id !== part.id ? p : {
+      ...p, yaw: (Number(p.yaw) || 0) + (delta.deg || 0) * Math.PI / 180,
+      pos: { x: r1(p.pos.x + (delta.dx || 0)),
+        y: delta.dy ? Math.max(halfHeight, r1(p.pos.y + delta.dy)) : p.pos.y,
+        z: r1(p.pos.z + (delta.dz || 0)) },
+    })
+    partsRef.current = next
+    setParts(next)
+  }
+
   // קושרת בתפר ישר היא בחירה: "בניהם מחברים ברגים ולפעמים גם קושרות".
   const toggleKoshret = (seam, on) => {
     applyLayout(wallView.layout, { ...(wallView.joints || {}), [seam]: { koshret: on } })
@@ -521,6 +549,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
       : { ...dims, marks }
     const saved = await onSave({ id: editId, name: nm, preview, parts, jobId })
     if (saved?.id) setEditId(saved.id)
+    return saved
   }
   const loadK = k => {
     // קיר שמור נפתח במסך ההרכבה, לא כחלקים על המשטח
@@ -651,6 +680,15 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
       )}
 
       {/* המשטח */}
+      <button type="button" className="btn" onClick={() => setStudioOpen(true)}
+        style={{ width: '100%', marginBottom: 12, minHeight: 54, justifyContent: 'space-between',
+          background: 'linear-gradient(115deg, #29392c, #1b271e)', borderColor: '#617348', color: '#f2edda' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m12 2 9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10M7.5 4.5l9 5v10" /></svg>
+          <span>אולפן תלת־ממד</span>
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 400 }}>העיצוב בתוך חדר ←</span>
+      </button>
       <div className="card" style={{ padding: 0, overflow: 'hidden', position: 'relative' }}>
         <canvas ref={cvRef}
           // בטלפון מסובב הגובה הוא 375: משטח קבוע של 360 בלע את כל המסך
@@ -1249,6 +1287,12 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
         </div>
       )}
 
+      {studioOpen && (
+        <StudioRoom name={name} dims={dims} parts={parts} materials={materials} marks={placedMarks}
+          wallView={wallView} selection={selK !== null ? { k: selK } : sel ? { id: sel } : null}
+          onSelect={studioSelect} onTransform={studioTransform} onUndo={undo} canUndo={!!histLen}
+          onSave={save} onClose={() => setStudioOpen(false)} />
+      )}
       {sheet && (
         <DrawingSheet name={name} dims={dims} parts={parts} materials={materials}
           stockOv={stockOv} kerfCm={mmToCm(kerfMm)} hardware={hardware} marks={placedMarks}
