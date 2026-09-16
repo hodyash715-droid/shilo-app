@@ -352,6 +352,9 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
                         <span className="t-meta">
                           {k.preview?.kind === 'wall'
                             ? <>🏗️ {(k.parts || []).length} קוליסות · <span className="mono">{k.preview?.רוחב}×{k.preview?.גובה}</span></>
+                            : k.preview?.kind === 'wall-layout'
+                            /* קיר מסודר: parts הם החלקים עצמם, מספר הקוליסות בא מהסידור */
+                            ? <>🏗️ {(k.preview?.wall?.widths || []).length} קוליסות · <span className="mono">{k.preview?.רוחב}×{k.preview?.גובה}</span></>
                             : <>{(k.parts || []).length} חלקים · <span className="mono">{k.preview?.גובה}×{k.preview?.רוחב}</span></>}
                         </span>
                       </span>

@@ -22,9 +22,18 @@ const THIN = 0.2, MED = 0.35, THICK = 0.6        // עובי קו במ"מ
 function extents(part, dims, materials) {
   const L = lenOf(part, dims)
   const [pw, ph] = profileOf(part, materials)
-  if (part.axis === 'x') return { hx: L / 2, hy: ph / 2, hz: pw / 2 }
-  if (part.axis === 'y') return { hx: pw / 2, hy: L / 2, hz: ph / 2 }
-  return { hx: pw / 2, hy: ph / 2, hz: L / 2 }
+  let e
+  if (part.axis === 'x') e = { hx: L / 2, hy: ph / 2, hz: pw / 2 }
+  else if (part.axis === 'y') e = { hx: pw / 2, hy: L / 2, hz: ph / 2 }
+  else e = { hx: pw / 2, hy: ph / 2, hz: L / 2 }
+
+  // חלק מסובב סביב הציר האנכי: הצללית בחזית ובצד נשארת מלבן מדויק,
+  // ברוחב |L·cos| + |עובי·sin|. הגובה לא משתנה. בלי זה כנף של 90°
+  // הייתה מצוירת לנגר כאילו היא עדיין בתוך מישור הקיר.
+  const a = Number(part.yaw) || 0
+  if (!a) return e
+  const c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a))
+  return { hx: e.hx * c + e.hz * s, hy: e.hy, hz: e.hx * s + e.hz * c }
 }
 
 // היטל: מה אופקי ומה אנכי בכל מבט
@@ -72,7 +81,7 @@ export function groupParts(parts, dims, materials) {
 }
 
 // ---------- ציור ----------
-export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {}, kerfCm }) {
+export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {}, kerfCm, hardware = [], marks = [] }) {
   const P = SHEET.px
   canvas.width = SHEET.w * P
   canvas.height = SHEET.h * P
@@ -119,8 +128,14 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {}, 
   const plans = optimize(cutList(parts, dims, materials), materials, stockOv, kerfCm)
 
   // ---- קנה מידה משותף לכל ההיטלים ----
-  const fB = bounds(boxesFor('front', parts, dims, materials))
-  const sB = bounds(boxesFor('side', parts, dims, materials))
+  // הסימונים נכנסים לתיחום ההיטל: בורג בקצה לא ייחתך מחוץ לדף.
+  const markBoxes = (view) => marks.map(m => {
+    const V = VIEWS[view]
+    const h = m.pos?.[V.h] || 0, v = m.pos?.[V.v] || 0
+    return { x0: h, x1: h, y0: v, y1: v }
+  })
+  const fB = bounds([...boxesFor('front', parts, dims, materials), ...markBoxes('front')])
+  const sB = bounds([...boxesFor('side', parts, dims, materials), ...markBoxes('side')])
   const frontW = viewsArea.w * 0.60, sideW = viewsArea.w * 0.36
   const padMm = 16                                  // מקום לקווי מידה
   const need = Math.max(
@@ -150,6 +165,23 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {}, 
       ctx.fillStyle = INK
       rect(x, y, bw, bh, MED)
     })
+
+    // ---- סימוני הברגים ----
+    // עיגול מלא עם מספר, כמו שמסמנים על תצלום באתר. שחור-לבן כדי
+    // שיישרד צילום והדפסה במדפסת רגילה.
+    const V = VIEWS[view]
+    // save/restore חובה: צבע קו לבן שדלף החוצה מחק את כל קווי הטבלה
+    // והמסגרות שצוירו אחרי זה — דף לבן על דף לבן.
+    ctx.save()
+    marks.forEach((m, i) => {
+      const cxm = sx(m.pos?.[V.h] || 0), cym = sy(m.pos?.[V.v] || 0)
+      ctx.beginPath(); ctx.arc(cxm, cym, 2.3, 0, Math.PI * 2)
+      ctx.fillStyle = INK; ctx.fill()
+      ctx.lineWidth = THIN; ctx.strokeStyle = '#fff'; ctx.stroke()
+      num(String(i + 1), cxm, cym + 1.05, { size: 2.7, align: 'center', bold: true, color: '#fff' })
+    })
+    ctx.restore()
+    ctx.fillStyle = INK; ctx.strokeStyle = INK
 
     // כותרת ההיטל
     txt(VIEWS[view].label, zone.x + zone.w - 1, zone.y + 4.5, { size: 3.4, bold: true })
@@ -267,6 +299,24 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {}, 
     line(T.x, ry, T.x + T.w, ry, THIN)
   })
 
+  // ---- פרזול: מה שלא נחתך מעץ ----
+  // בלי זה הדף שותק על פינה מוברגת, והמרכיב באתר מגיע בלי ברגים.
+  if (hardware.length) {
+    line(T.x, ry, T.x + T.w, ry, MED)
+    ctx.fillStyle = '#F6F6F6'; ctx.fillRect(T.x, ry, T.w, 5); ctx.fillStyle = INK
+    txt('פרזול', T.x + T.w - 2, ry + 3.6, { size: 2.7, bold: true })
+    ry += 5
+    line(T.x, ry, T.x + T.w, ry, THIN)
+    hardware.forEach(h => {
+      if (ry + rowH > T.y + T.h - 26) return
+      txt(h.name, colX[1].r - 1.5, ry + 4.2, { size: 2.9, max: colX[1].w + colX[0].w - 3 })
+      txt(h.note || '—', colX[2].l + colX[2].w / 2, ry + 4.2, { size: 2.5, align: 'center' })
+      num(h.qty, colX[3].l + colX[3].w / 2, ry + 4.2, { size: 3, bold: true })
+      ry += rowH
+      line(T.x, ry, T.x + T.w, ry, THIN)
+    })
+  }
+
   // ---- סיכום קנייה בתחתית הטבלה ----
   const sumY = T.y + T.h - 24
   line(T.x, sumY, T.x + T.w, sumY, MED)
@@ -309,7 +359,8 @@ export function drawSheet(canvas, { name, dims, parts, materials, stockOv = {}, 
   txt('שילה — מיתוג והפקות', TB.x + 2, TB.y + 9, { size: 3.6, bold: true, align: 'left' })
   txt('שרטוט ייצור', TB.x + 2, TB.y + 15, { size: 2.7, color: '#666', align: 'left' })
   const kerfMm = Math.round((plans[0]?.kerf ?? 0) * 100) / 10
-  txt(`כל המידות בס״מ · לבדוק במקום לפני חיתוך · חושב עם מסור ${kerfMm} מ״מ`,
+  const legend = marks.length ? ` · עיגול מלא ● = בורג` : ''
+  txt(`כל המידות בס״מ · לבדוק במקום לפני חיתוך · חושב עם מסור ${kerfMm} מ״מ${legend}`,
     TB.x + 2, TB.y + 21, { size: 2.4, color: '#666', align: 'left' })
 
   return { ratio, groups, plans, totalBars }

@@ -41,6 +41,31 @@ export const KOSHRET = {
   status: 'verified',
   overlapStatus: 'preference',
 }
+// ---- חיבור בין שתי קוליסות ----
+// שי, 16.9.2026: "בניהם מחברים ברגים ולפעמים גם קושרות."
+// כלומר הברגים הם החיבור עצמו, בכל תפר. הקושרת היא תוספת ייצוב
+// שמצטרפת כשצריך, ולא החיבור היחיד כפי שהנחנו קודם.
+export const JOINT = {
+  bolt: 'בורג 4.2 שחור',        // אושר 16.9.2026. האורך עדיין לא נמסר.
+  boltLenStatus: 'unknown',
+  bolts: 3,                     // אושר לפינה. לתפר ישר טרם נמסר מספר —
+  boltsStatus: 'assumption',    // מניחים אותו מספר עד שיימסר אחרת.
+  koshretByDefault: true,       // תפר ישר מקבל קושרות, אפשר לבטל ידנית
+  status: 'verified',
+}
+
+// ---- חיבור פינה: כנף שנפתחה מהקיר ----
+// אושר 16.9.2026 מתצלום באתר: שלושה ברגים לאורך התפר האנכי,
+// ואותו דבר בפינה השנייה. קושרת היא לטה שמונחת על שתי קוליסות
+// באותו מישור, ולכן אין לה מה לעשות בפינה — הברגים לבדם.
+export const CORNER = {
+  bolts: 3,
+  bolt: JOINT.bolt,
+  replacesKoshret: true,
+  placement: 'התפר האנכי, מלמעלה למטה',
+  status: 'verified',
+}
+
 export const koshretLength = (overlapCm = KOSHRET.overlapCm) =>
   Math.round(Number(overlapCm) * 2 * 10) / 10
 

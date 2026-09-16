@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { DIMS, render, hitTest, lenOf, worldPerPixel, dragAxes, snapAlong } from '../designer/geometry.js'
+import { DIMS, render, hitTest, hitFace, pointOnFace, markAt, lenOf, worldPerPixel, dragAxes, snapAlong } from '../designer/geometry.js'
 import { cutList, optimize, DEFAULT_STOCK, PURCHASE, KERF_OPTIONS, DEFAULT_KERF_MM, mmToCm } from '../designer/cuts.js'
 import { materialsFor, pickable } from '../designer/materials.js'
 import { generateKulisa, defaultFrameMaterial, BRACE_MAX, BRACE_DEFAULT, LIMITS_PREFERRED } from '../designer/kulisa.js'
-import { validateDims, invalidParts, tooLongParts } from '../designer/rules.js'
+import { validateDims, invalidParts, tooLongParts, JOINT } from '../designer/rules.js'
 import WallBuilder from './WallBuilder.jsx'
-import { wallParts } from '../designer/wall.js'
+import { wallLayout, applyToPoint, unapplyFromPoint } from '../designer/wall.js'
 import DrawingSheet from './DrawingSheet.jsx'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -34,6 +34,14 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   // סיכום הקיר שעל המשטח, או null אם מה שמוצג הוא קוליסה בודדת.
   // בלעדיו "רוחב 690 מעל המקסימום" היה מוצג כאזהרה על קיר תקין לגמרי.
   const [wallView, setWallView] = useState(null)
+  // הקוליסה שנבחרה מהרשימה שמתחת למשטח (0 = הקושרות)
+  const [selK, setSelK] = useState(null)
+  const [stepDeg, setStepDeg] = useState(45)
+  const [stepCm, setStepCm] = useState(10)
+  // סימוני ברגים: איפה מחברים בפועל. נשמרים עם הקוליסה או הקיר.
+  // pos נשמר במצב הישר של הקיר; המקום האמיתי מחושב לפי הסידור הנוכחי.
+  const [marks, setMarks] = useState([])
+  const [markMode, setMarkMode] = useState(false)
   // המזהה נשמר ב-ref ולא ב-state: שינוי state היה מרענן את key של
   // WallBuilder ומאפס את העריכה באמצע.
   const wallIdRef = useRef(null)
@@ -57,12 +65,32 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   const selPart = parts.find(p => p.id === sel) || null
 
   // ציור מחדש בכל שינוי
-  useEffect(() => {
-    hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: sel, guides })
-  }, [parts, dims, materials, view, sel, guides])
+  // הציר והסידור של הקוליסה שעליה יושב הסימון
+  const markFrame = (k) => {
+    const g = wallView?.groups?.find(x => x.k === k)
+    return g ? { t: wallView.layout?.[k] || {}, pivot: g.pivot } : null
+  }
+  // הסימון במקומו האמיתי על המשטח
+  const markWorld = (m) => {
+    const fr = m.k ? markFrame(m.k) : null
+    return fr ? applyToPoint(m.pos, fr.t, fr.pivot) : m.pos
+  }
+  const placedMarks = React.useMemo(
+    () => marks.map(m => ({ ...m, pos: markWorld(m) })),
+    [marks, wallView?.layout, wallView?.groups]
+  )
+
+  // מה מודגש על המשטח: חלק בודד, או כל הקוליסה שנבחרה מהרשימה
+  const highlight = React.useMemo(() => (
+    selK === null ? sel : new Set(parts.filter(p => p.k === selK).map(p => p.id))
+  ), [selK, sel, parts])
 
   useEffect(() => {
-    const on = () => { hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: sel, guides }) }
+    hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: highlight, guides, marks: placedMarks })
+  }, [parts, dims, materials, view, highlight, guides, placedMarks])
+
+  useEffect(() => {
+    const on = () => { hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: highlight, guides, marks: placedMarks }) }
     window.addEventListener('resize', on)
     return () => window.removeEventListener('resize', on)
   })
@@ -70,11 +98,15 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   // מצב עדכני של החלקים גם בין רינדורים — גרירה חייבת בסיס טרי
   const partsRef = useRef(parts)
   partsRef.current = parts
+  const marksRef = useRef(marks)
+  marksRef.current = marks
 
   // ---- היסטוריה: בטל ----
+  // ההיסטוריה מחזיקה גם חלקים וגם סימוני ברגים: מחיקת סימון בטעות
+  // היא בדיוק הדבר שרוצים לבטל.
   const snapshot = () => {
     const h = histRef.current
-    h.past.push(JSON.stringify(partsRef.current))
+    h.past.push(JSON.stringify({ p: partsRef.current, m: marksRef.current }))
     if (h.past.length > 40) h.past.shift()
     setHistLen(h.past.length)
   }
@@ -82,8 +114,10 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     const h = histRef.current
     if (!h.past.length) return
     const prev = JSON.parse(h.past.pop())
-    partsRef.current = prev
-    setParts(prev); setSel(null); setGuides([]); setHistLen(h.past.length)
+    partsRef.current = prev.p
+    marksRef.current = prev.m || []
+    setParts(prev.p); setMarks(prev.m || [])
+    setSel(null); setGuides([]); setHistLen(h.past.length)
   }
 
   // ---- אינטראקציה: גרירת חלק / סיבוב תצוגה / זום ----
@@ -111,6 +145,15 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
       return
     }
     const c = canvasXY(e), q = pt(e)
+
+    // מצב סימון: הסימון מונח רק כשמרימים את האצבע בלי לגרור. באצבע
+    // על טלפון, כל סיבוב מבט מתחיל בנגיעה — בלי ההמתנה הזו כל ניסיון
+    // להסתובב היה משאיר בורג מיותר.
+    if (markMode) {
+      dragRef.current = { mode: 'mark', lx: q.cx, ly: q.cy, sx: q.cx, sy: q.cy, cx: c.x, cy: c.y }
+      return
+    }
+
     const id = hitTest(hitsRef.current, c.x, c.y)
     setSel(id)
     if (id) snapshot()
@@ -131,6 +174,12 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     const q = pt(e)
     const dx = q.cx - d.lx, dy = q.cy - d.ly
     d.lx = q.cx; d.ly = q.cy
+
+    // זזה האצבע יותר מכמה פיקסלים? זו גרירה, לא נגיעה — והסימון מבוטל.
+    if (d.mode === 'mark') {
+      if (Math.hypot(q.cx - d.sx, q.cy - d.sy) > 8) d.mode = 'orbit'
+      else return
+    }
 
     if (d.mode === 'orbit') {
       setView(v => ({ ...v, yaw: v.yaw - dx * 0.01, pitch: Math.max(-1.2, Math.min(1.4, v.pitch + dy * 0.01)) }))
@@ -165,7 +214,35 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     setParts(next); setGuides(g)
   }
 
-  const up = () => { dragRef.current = null; setGuides([]) }
+  const up = () => {
+    const d = dragRef.current
+    if (d?.mode === 'mark') placeMark(d.cx, d.cy)
+    dragRef.current = null; setGuides([])
+  }
+
+  // הנחה או מחיקה של סימון בנקודה שנלחצה
+  const placeMark = (cx, cy) => {
+    const cv = cvRef.current
+    const hitIdx = markAt(placedMarks, view, cv.width, cv.height, cx, cy)
+    if (hitIdx !== null) {
+      snapshot()
+      setMarks(ms => ms.filter((_, i) => i !== hitIdx))
+      return
+    }
+    const face = hitFace(hitsRef.current, cx, cy)
+    if (!face) return
+    const p = pointOnFace(face, cx, cy, view, cv.width, cv.height)
+    if (!p) return
+    // לאיזו קוליסה הסימון שייך, וכיצד הוא נראה במצב הישר
+    const part = parts.find(x => x.id === face.partId)
+    const k = Number(part?.k) || 0
+    const fr = k ? markFrame(k) : null
+    snapshot()
+    setMarks(ms => [...ms, {
+      id: uid(), k,
+      pos: fr ? unapplyFromPoint(p, fr.t, fr.pivot) : p,
+    }])
+  }
   const wheel = e => { e.preventDefault(); setView(v => ({ ...v, dist: Math.max(60, Math.min(2000, v.dist + e.deltaY * 0.5)) })) }
 
   // ---- חלקים ----
@@ -207,6 +284,8 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     () => generateKulisa({ width: gen.w, height: gen.h, depth: dims.עומק, material: genMat, braces: gen.braces, giben: gen.giben }),
     [gen.w, gen.h, gen.braces, gen.giben, genMat, dims.עומק]
   )
+  const r1 = n => Math.round(n * 10) / 10
+
   // מרחק המצלמה. עד היום נגזר מהגובה בלבד — קיר של 7 מטר נחתך בצדדים.
   const frameFor = (d) => ({
     target: { x: 0, y: (Number(d.גובה) || 0) / 2, z: 0 },
@@ -219,7 +298,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     snapshot()
     setDims(d => ({ ...d, רוחב: gen.w, גובה: gen.h }))
     setParts(genResult.parts)
-    setWallView(null)
+    setWallView(null); setSelK(null); setMarks([])
     setSel(null); setGuides([]); setPanel(null)
     if (!name.trim()) setName(`קוליסה ${gen.h}×${gen.w}`)
     setView(v => ({ ...v, target: { x: 0, y: gen.h / 2, z: 0 }, dist: Math.max(340, gen.h * 1.6) }))
@@ -234,7 +313,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     snapshot()
     setDims(d => ({ ...d, רוחב: width, גובה: wallH }))
     setParts(g.parts)
-    setWallView(null)
+    setWallView(null); setSelK(null); setMarks([])
     setSel(null); setGuides([]); setPanel(null)
     setName(`קוליסה ${index} · ${width}×${wallH}`)
     setView(v => ({ ...v, target: { x: 0, y: wallH / 2, z: 0 }, dist: Math.max(340, wallH * 1.6) }))
@@ -243,20 +322,71 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   // כל הקיר על המשטח: הקוליסות זו לצד זו, והקושרות מאחור על התפרים.
   // האורכים נכתבים כמספרים ולא כנוסחאות — {רוחב} כאן הוא רוחב הקיר
   // כולו, ואילו כל אופקי נמדד לפי הקוליסה שלו.
+  // אפשרויות הייצור של הקיר. נקבעות פעם אחת כשהקיר עולה למשטח,
+  // ונשמרות איתו — כדי שבנייה מחדש תיתן בדיוק את אותו קיר.
+  const prodNow = () => ({ braces: gen.braces, giben: gen.giben, depth: dims.עומק, matId: genMat?.id })
+  const wallOpts = (prod) => {
+    const p = prod || prodNow()
+    return {
+      material: materials.find(m => m.id === p.matId) || genMat,
+      braces: p.braces, giben: p.giben, depth: p.depth,
+    }
+  }
+
   const showWallOnCanvas = (widths, wallH, overlapCm) => {
     if (parts.length && !confirm('פעולה זו מחליפה את כל החלקים שעל המשטח. להמשיך?')) return
-    const r = wallParts(widths, wallH, {
-      material: genMat, braces: gen.braces, giben: gen.giben, overlapCm, depth: dims.עומק,
-    })
+    const base = { widths: [...widths], height: Number(wallH), overlapCm, prod: prodNow() }
+    const r = wallLayout(base.widths, base.height, { ...wallOpts(base.prod), overlapCm }, {}, {})
     if (!r.parts.length) return
     snapshot()
     setDims(r.dims)
     setParts(r.parts)
-    setSel(null); setGuides([]); setPanel(null)
-    setWallView({ kulisot: r.kulisot, koshret: r.koshret, width: r.dims.רוחב })
+    setSel(null); setSelK(null); setGuides([]); setPanel(null)
+    setWallView({
+      base, layout: {}, joints: {}, groups: r.groups,
+      seams: r.seams, bolts: r.bolts, koshretDropped: r.koshretDropped,
+      kulisot: r.kulisot, koshret: r.koshret, width: r.dims.רוחב,
+    })
     setName(n => n.trim() || `קיר ${r.dims.רוחב}×${r.dims.גובה}`)
     setView(v => ({ ...v, ...frameFor(r.dims) }))
     setTimeout(() => cvRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0)
+  }
+
+  // סידור: הזזה או סיבוב של קוליסה שלמה. הקיר נבנה מחדש מהמצב הישר
+  // ומהסידור המצטבר, כדי ששום לחיצה לא תיפול על תוצאה של קודמתה.
+  const arrange = (k, delta) => {
+    if (!wallView) return
+    const cur = wallView.layout[k] || { dx: 0, dz: 0, deg: 0 }
+    const next = {
+      dx: r1(cur.dx + (delta.dx || 0)),
+      dz: r1(cur.dz + (delta.dz || 0)),
+      deg: r1(cur.deg + (delta.deg || 0)),
+    }
+    applyLayout({ ...wallView.layout, [k]: next })
+  }
+
+  const applyLayout = (layout, joints) => {
+    const b = wallView.base
+    const nextJoints = joints || wallView.joints || {}
+    const r = wallLayout(b.widths, b.height,
+      { ...wallOpts(b.prod), overlapCm: b.overlapCm }, layout, nextJoints)
+    if (!r.parts.length) return
+    snapshot()
+    setParts(r.parts)
+    setWallView(w => ({
+      ...w, layout, joints: nextJoints, groups: r.groups,
+      seams: r.seams, bolts: r.bolts, koshret: r.koshret, koshretDropped: r.koshretDropped,
+    }))
+  }
+
+  // קושרת בתפר ישר היא בחירה: "בניהם מחברים ברגים ולפעמים גם קושרות".
+  const toggleKoshret = (seam, on) => {
+    applyLayout(wallView.layout, { ...(wallView.joints || {}), [seam]: { koshret: on } })
+  }
+
+  const resetArrange = () => {
+    if (!confirm('להחזיר את כל הקוליסות לקו ישר?')) return
+    applyLayout({}, wallView.joints || {})
   }
 
   // שמירת קיר. אותה טבלה כמו קוליסה — preview.kind מבדיל ביניהם,
@@ -275,6 +405,23 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     if (saved?.id) wallIdRef.current = saved.id
   }
 
+  // פרזול לשרטוט: מה שלא נחתך מעץ אבל בלעדיו אי אפשר להרכיב.
+  // פרזול לשרטוט. סימון ידני גובר על ההערכה לפי תפרים — אם סומן
+  // איפה מבריגים, זו הכמות האמיתית ולא חישוב.
+  const hardware = React.useMemo(() => {
+    if (marks.length) {
+      return [{ name: JOINT.bolt, qty: marks.length, note: 'מסומנים בשרטוט' }]
+    }
+    const seams = wallView?.seams || []
+    if (!seams.length) return []
+    const corners = seams.filter(x => x.corner).length
+    return [{
+      name: JOINT.bolt,
+      qty: seams.reduce((n, x) => n + x.bolts, 0),
+      note: corners ? `${seams.length} תפרים · ${corners} פינות` : `${seams.length} תפרים`,
+    }]
+  }, [marks.length, wallView?.seams])
+
   // ---- אימות: חלק שבור לא יגיע בשקט לרשימת החיתוך ----
   const dimCheckRaw = validateDims(dims)
   // על קיר, "רוחב מעל 150" הוא סכום הקוליסות ולא חריגה. כל שאר
@@ -290,9 +437,16 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
 
   // ---- שמירה / טעינה ----
   const save = async () => {
-    const nm = (name || '').trim() || `קוליסה ${dims.גובה}×${dims.רוחב}`
+    const isWall = !!wallView
+    const nm = (name || '').trim() ||
+      (isWall ? `קיר ${dims.רוחב}×${dims.גובה}` : `קוליסה ${dims.גובה}×${dims.רוחב}`)
     setName(nm)
-    const saved = await onSave({ id: editId, name: nm, preview: dims, parts, jobId })
+    // קיר מסודר נשמר עם הסידור עצמו ולא רק עם התוצאה, כדי שאפשר
+    // יהיה לפתוח אותו שוב ולהזיז כנף — ולא רק להסתכל עליה.
+    const preview = isWall
+      ? { ...dims, kind: 'wall-layout', marks, wall: { ...wallView.base, layout: wallView.layout, joints: wallView.joints || {} } }
+      : { ...dims, marks }
+    const saved = await onSave({ id: editId, name: nm, preview, parts, jobId })
     if (saved?.id) setEditId(saved.id)
   }
   const loadK = k => {
@@ -312,10 +466,35 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     setEditId(k.id); setName(k.name); setJobId(k.job_id || null)
     setDims({ ...{ גובה: 200, רוחב: 100, עומק: 40, עובי: 2 }, ...(k.preview || {}) })
     setParts(Array.isArray(k.parts) ? k.parts : [])
-    setSel(null); setPanel(null); setWallView(null)
+    setSel(null); setPanel(null); setSelK(null)
+    setMarks(Array.isArray(k.preview?.marks) ? k.preview.marks : [])
+    setMarkMode(false)
+
+    // קיר מסודר: בונים מחדש את הקבוצות כדי שהכנפיים יהיו ניתנות
+    // להזזה שוב. אם הבנייה נכשלת נשארים עם החלקים בלבד — עדיף
+    // מאשר כפתורים שמצביעים על כלום.
+    const w = k.preview?.wall
+    if (k.preview?.kind === 'wall-layout' && w?.widths?.length) {
+      const r = wallLayout(w.widths, w.height,
+        { ...wallOpts(w.prod), overlapCm: w.overlapCm }, w.layout || {}, w.joints || {})
+      // החלקים נלקחים מהבנייה מחדש ולא מהשמירה: אחרת רשימת הקוליסות
+      // הייתה מצביעה על מזהים שכבר לא על המשטח, והכפתורים היו משקרים.
+      if (r.parts.length) setParts(r.parts)
+      setWallView(r.parts.length ? {
+        base: { widths: w.widths, height: w.height, overlapCm: w.overlapCm, prod: w.prod },
+        layout: w.layout || {}, joints: w.joints || {}, groups: r.groups,
+        seams: r.seams, bolts: r.bolts, koshretDropped: r.koshretDropped,
+        kulisot: r.kulisot, koshret: r.koshret, width: r.dims.רוחב,
+      } : null)
+      return
+    }
+    setWallView(null)
   }
   const newK = (forJob = null) => {
-    setEditId(null); setName(''); setParts([]); setSel(null); setPanel(null); setWallView(null)
+    // אחרי קיר, המידות נשארו על 330 רוחב — ועל משטח ריק זו הייתה
+    // אזהרת חריגה על כלום. חוזרים למידות שמסך הקוליסה בונה בהן.
+    if (wallView) setDims(d => ({ ...d, רוחב: gen.w, גובה: gen.h }))
+    setEditId(null); setName(''); setParts([]); setSel(null); setPanel(null); setWallView(null); setSelK(null); setMarks([]); setMarkMode(false)
     setJobId(forJob)
     histRef.current = { past: [], future: [] }; setHistLen(0)
   }
@@ -401,7 +580,12 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
       {/* המשטח */}
       <div className="card" style={{ padding: 0, overflow: 'hidden', position: 'relative' }}>
         <canvas ref={cvRef}
-          style={{ width: '100%', height: 360, display: 'block', touchAction: 'none', cursor: 'grab' }}
+          // בטלפון מסובב הגובה הוא 375: משטח קבוע של 360 בלע את כל המסך
+          // ולא נשאר מקום לכפתורים. בזקוף שום דבר לא משתנה.
+          style={{
+            width: '100%', height: 'min(360px, 62vh)', minHeight: 190,
+            display: 'block', touchAction: 'none', cursor: 'grab',
+          }}
           onMouseDown={down} onMouseMove={move} onMouseUp={up} onMouseLeave={up}
           onTouchStart={down} onTouchMove={move} onTouchEnd={up}
           onWheel={wheel} />
@@ -420,21 +604,41 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
             </div>
           </div>
         )}
-        {wallView && (
+        {markMode && (
+          <div style={{
+            position: 'absolute', bottom: 10, insetInlineStart: 10, insetInlineEnd: 10,
+            pointerEvents: 'none', textAlign: 'center',
+            background: 'rgba(255,61,190,.14)', border: '1px solid #FF3DBE', borderRadius: 8,
+            padding: '3px 8px', fontSize: 11, fontWeight: 700, color: 'var(--ink)',
+          }}>
+            לחץ לסמן בורג · לחיצה על סימון מוחקת
+            {marks.length > 0 && <> · <span className="mono">{marks.length}</span> עד כה</>}
+          </div>
+        )}
+        {wallView && !markMode && (
           <div style={{
             position: 'absolute', bottom: 10, insetInlineStart: 10, pointerEvents: 'none',
             background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 8,
             padding: '4px 9px', fontSize: 12, fontWeight: 700,
           }}>
             🏗️ קיר · <span className="mono">{wallView.kulisot}</span> קוליסות ·{' '}
-            <span className="mono">{wallView.koshret}</span> קושרות ·{' '}
-            <span className="mono">{wallView.width}</span> ס״מ
+            <span className="mono">{wallView.koshret}</span> קושרות
+            {wallView.bolts > 0 && <> · <span className="mono">{wallView.bolts}</span> ברגים</>}
+            {' '}· <span className="mono">{wallView.width}</span> ס״מ
           </div>
         )}
-        <div className="row gap-2" style={{ position: 'absolute', top: 10, insetInlineStart: 10 }}>
+        {/* ארבעה כפתורים לא נכנסים בשורה אחת ברוחב 375 — מותר להם לרדת שורה */}
+        <div className="row gap-2 wrap" style={{ position: 'absolute', top: 10, insetInlineStart: 10, insetInlineEnd: 10 }}>
           <button className="btn btn-sm" onClick={resetView}>🔄 מבט</button>
           <button className="btn btn-sm" onClick={undo} disabled={!histLen}
             style={{ opacity: histLen ? 1 : .4 }}>↶ בטל</button>
+          <button className="btn btn-sm" onClick={() => { setMarkMode(v => !v); setSel(null) }}
+            title="סימון מקומות הברגים"
+            style={{
+              background: markMode ? '#FF3DBE' : 'var(--card)',
+              color: markMode ? '#fff' : 'var(--ink45)',
+              borderColor: markMode ? '#FF3DBE' : 'var(--line)',
+            }}>🔩 ברגים{marks.length > 0 && <> <span className="mono">{marks.length}</span></>}</button>
           <button className="btn btn-sm" onClick={() => setSnapOn(v => !v)} title="הצמדה לחלקים אחרים"
             style={{
               background: snapOn ? 'var(--go-bg)' : 'var(--card)',
@@ -455,6 +659,149 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
         {tbtn('💾 שמור', save)}
         {parts.length > 0 && tbtn('חדש', () => newK(jobId))}
       </div>
+
+      {/* הקוליסות שמרכיבות את הקיר — בחירה והזזה כיחידה שלמה */}
+      {wallView && (
+        <div className="card" style={{ marginTop: 10, padding: 12 }}>
+          <div className="t-meta" style={{ marginBottom: 7 }}>
+            הקוליסות בקיר — בחר אחת כדי להזיז או לפתוח אותה ככנף
+          </div>
+          <div className="row gap-2 wrap">
+            {wallView.groups.map(g => {
+              const on = selK === g.k
+              return (
+                <button key={g.k} className="btn btn-sm"
+                  onClick={() => { setSelK(on ? null : g.k); setSel(null) }}
+                  style={{
+                    minHeight: 34,
+                    background: on ? 'var(--gold-bg)' : 'var(--card)',
+                    color: on ? 'var(--gold-fg)' : 'var(--ink70)',
+                    borderColor: on ? 'var(--gold)' : 'var(--line)',
+                  }}>
+                  {g.label}
+                  {g.width != null && <> · <span className="mono">{g.width}</span></>}
+                  {g.k === 0 && <> · <span className="mono">{g.count}</span></>}
+                  {g.moved && ' ✳'}
+                </button>
+              )
+            })}
+          </div>
+
+          {selK !== null && (() => {
+            const g = wallView.groups.find(x => x.k === selK)
+            const t = wallView.layout[selK] || { dx: 0, dz: 0, deg: 0 }
+            const small = { minHeight: 34, flex: '1 1 0' }
+            return (
+              <div style={{ marginTop: 11, borderTop: '1px solid var(--line)', paddingTop: 11 }}>
+                <div className="row between" style={{ marginBottom: 8 }}>
+                  <span style={{ fontWeight: 700 }}>
+                    {g?.label}{g?.width != null && <> · <span className="mono">{g.width}</span> ס״מ</>}
+                  </span>
+                  <span className="t-meta mono">
+                    {t.deg ? `${t.deg}°` : 'ישר'}{(t.dx || t.dz) ? ` · ${t.dx}/${t.dz}` : ''}
+                  </span>
+                </div>
+
+                <div className="t-meta" style={{ marginBottom: 4 }}>
+                  סיבוב — נפתחת סביב הקצה הפנימי, כמו דלת. בחר זווית ולחץ על החץ.
+                </div>
+                <div className="row gap-2" dir="ltr" style={{ marginBottom: 8 }}>
+                  <button className="btn btn-sm" style={small}
+                    onClick={() => arrange(selK, { deg: -stepDeg })}>⟲</button>
+                  {[15, 45, 90].map(d => (
+                    <button key={d} className="btn btn-sm mono" onClick={() => setStepDeg(d)}
+                      style={{
+                        ...small,
+                        background: stepDeg === d ? 'var(--gold-bg)' : 'var(--card)',
+                        color: stepDeg === d ? 'var(--gold-fg)' : 'var(--ink45)',
+                        borderColor: stepDeg === d ? 'var(--gold)' : 'var(--line)',
+                      }}>{d}°</button>
+                  ))}
+                  <button className="btn btn-sm" style={small}
+                    onClick={() => arrange(selK, { deg: +stepDeg })}>⟳</button>
+                </div>
+
+                <div className="t-meta" style={{ marginBottom: 4 }}>הזזה</div>
+                <div className="row gap-2" dir="ltr" style={{ marginBottom: 8, fontSize: 12 }}>
+                  <button className="btn btn-sm" style={small}
+                    onClick={() => arrange(selK, { dx: -stepCm })}>← שמאלה</button>
+                  <button className="btn btn-sm" style={small}
+                    onClick={() => arrange(selK, { dz: -stepCm })}>↑ אחורה</button>
+                  <button className="btn btn-sm" style={small}
+                    onClick={() => arrange(selK, { dz: +stepCm })}>↓ קדימה</button>
+                  <button className="btn btn-sm" style={small}
+                    onClick={() => arrange(selK, { dx: +stepCm })}>→ ימינה</button>
+                </div>
+                <div className="t-meta" style={{ marginBottom: 4 }}>צעד ההזזה (ס״מ)</div>
+                <div className="row gap-2" dir="ltr">
+                  {[5, 10, 25, 50].map(c => (
+                    <button key={c} className="btn btn-sm mono" onClick={() => setStepCm(c)}
+                      style={{
+                        ...small,
+                        background: stepCm === c ? 'var(--gold-bg)' : 'var(--card)',
+                        color: stepCm === c ? 'var(--gold-fg)' : 'var(--ink45)',
+                        borderColor: stepCm === c ? 'var(--gold)' : 'var(--line)',
+                      }}>{c}</button>
+                  ))}
+                </div>
+
+                <div className="row gap-2" style={{ marginTop: 10 }}>
+                  <button className="btn btn-sm grow" disabled={!g?.moved}
+                    onClick={() => applyLayout({ ...wallView.layout, [selK]: { dx: 0, dz: 0, deg: 0 } })}>
+                    ↺ החזר את {g?.label} למקום
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+
+          {wallView.seams?.length > 0 && (
+            <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 11 }}>
+              <div className="t-meta" style={{ marginBottom: 6 }}>
+                חיבורים — ברגים בכל תפר. קושרת אפשר להוסיף או להוריד.
+              </div>
+              <div className="row gap-2 wrap">
+                {wallView.seams.map(sm => (
+                  <button key={sm.seam} className="btn btn-sm"
+                    disabled={!sm.canToggleKoshret}
+                    onClick={() => sm.canToggleKoshret && toggleKoshret(sm.seam, !sm.koshret)}
+                    style={{
+                      minHeight: 34, fontSize: 12,
+                      background: sm.koshret ? 'var(--gold-bg)' : 'var(--card)',
+                      color: sm.corner ? 'var(--ink45)' : (sm.koshret ? 'var(--gold-fg)' : 'var(--ink70)'),
+                      borderColor: sm.koshret ? 'var(--gold)' : 'var(--line)',
+                      opacity: sm.canToggleKoshret ? 1 : .75,
+                    }}>
+                    ק{sm.between[0]}–ק{sm.between[1]} ·{' '}
+                    🔩<span className="mono">{sm.bolts}</span>
+                    {sm.corner
+                      ? <> · פינה{sm.angle ? <> <span className="mono">{Math.abs(sm.angle)}°</span></> : null}</>
+                      : <> · {sm.koshret ? 'קושרות ✓' : 'בלי קושרות'}</>}
+                  </button>
+                ))}
+              </div>
+              <div className="t-meta" style={{ marginTop: 7, lineHeight: 1.6 }}>
+                סה״כ <span className="mono">{wallView.bolts}</span> × {JOINT.bolt} ·{' '}
+                <span className="mono">{wallView.koshret}</span> קושרות.
+                {wallView.seams.some(x => x.corner) &&
+                  ' על פינה לא יושבת קושרת — שם הברגים לבדם.'}
+              </div>
+            </div>
+          )}
+
+          {wallView.groups.some(g => g.moved) && (
+            <>
+              <div className="t-meta" style={{ marginTop: 10, lineHeight: 1.6 }}>
+                ✳ הזזה בלי פינה לא משנה את העץ ברשימה. פינה כן:
+                שם יורדות הקושרות ונשארים הברגים.
+              </div>
+              <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={resetArrange}>
+                ↺ החזר הכול לקו ישר
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* רצועת החלקים — בחירה מהירה בלי לצוד על המשטח */}
       {parts.length > 0 && (
@@ -636,6 +983,11 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
                   <div className="t-meta">
                     {k.preview?.kind === 'wall'
                       ? <>🏗️ {(k.parts || []).length} קוליסות · <span className="mono">{k.preview?.רוחב}×{k.preview?.גובה}</span></>
+                      : k.preview?.kind === 'wall-layout'
+                      // קיר מסודר: parts הם החלקים עצמם, ומספר הקוליסות בא מהסידור
+                      ? <>🏗️ {(k.preview?.wall?.widths || []).length} קוליסות{
+                          Object.values(k.preview?.wall?.layout || {}).some(t => t?.deg || t?.dx || t?.dz) && ' · עם כנפיים'
+                        } · <span className="mono">{k.preview?.רוחב}×{k.preview?.גובה}</span></>
                       : <>{(k.parts || []).length} חלקים · <span className="mono">{k.preview?.גובה}×{k.preview?.רוחב}</span></>}
                   </div>
                 </button>
@@ -794,7 +1146,8 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
 
       {sheet && (
         <DrawingSheet name={name} dims={dims} parts={parts} materials={materials}
-          stockOv={stockOv} kerfCm={mmToCm(kerfMm)} onClose={() => setSheet(false)} />
+          stockOv={stockOv} kerfCm={mmToCm(kerfMm)} hardware={hardware} marks={placedMarks}
+          onClose={() => setSheet(false)} />
       )}
     </div>
   )

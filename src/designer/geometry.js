@@ -1,6 +1,8 @@
 // ============================================================
 // מנוע גיאומטריה ורינדור לקוליסה — canvas 2D, בלי ספריות.
-// חלק = תיבה מיושרת-צירים עם אורך שהוא נוסחה ({גובה}, {רוחב}-8 …)
+// חלק = תיבה עם אורך שהוא נוסחה ({גובה}, {רוחב}-8 …), מיושרת-צירים
+// אלא אם יש לה yaw — סיבוב סביב הציר האנכי, ברדיאנים. זה מה שמאפשר
+// כנף בצד הקיר.
 // ============================================================
 
 export const DIMS = ['גובה', 'רוחב', 'עומק', 'עובי']
@@ -77,7 +79,15 @@ export function cornersOf(part, dims, materials) {
   const c = part.pos, C = []
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1])
     C.push({ x: c.x + sx * hx, y: c.y + sy * hy, z: c.z + sz * hz })
-  return C
+
+  // סיבוב סביב מרכז החלק עצמו, במישור הרצפה. הגובה לא נוגע.
+  const a = Number(part.yaw) || 0
+  if (!a) return C
+  const ca = Math.cos(a), sa = Math.sin(a)
+  return C.map(p => {
+    const dx = p.x - c.x, dz = p.z - c.z
+    return { x: c.x + dx * ca - dz * sa, y: p.y, z: c.z + dx * sa + dz * ca }
+  })
 }
 
 const FACES = [
@@ -133,7 +143,7 @@ function drawGrid(ctx, view, W, H, dpr, halfSpan = 120) {
 }
 
 // ---- ציור מלא. מחזיר את הפאות למטרת hit-test ----
-export function render(canvas, { parts, dims, materials, view, selId, guides }) {
+export function render(canvas, { parts, dims, materials, view, selId, guides, marks = [] }) {
   if (!canvas) return []
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
   const r = canvas.getBoundingClientRect()
@@ -144,15 +154,20 @@ export function render(canvas, { parts, dims, materials, view, selId, guides }) 
   ctx.clearRect(0, 0, W, H)
   drawGrid(ctx, view, W, H, dpr, Math.max(Number(dims?.רוחב) || 0, Number(dims?.עומק) || 0) / 2 + 40)
 
+  // selId הוא מזהה יחיד, או Set כשמסומנת קוליסה שלמה בתוך קיר
+  const selSet = selId instanceof Set ? selId : new Set(selId ? [selId] : [])
+
   const faces = []
   parts.forEach(part => {
-    const C = cornersOf(part, dims, materials).map(p => project(p, view, W, H))
+    const W3 = cornersOf(part, dims, materials)          // הפינות בעולם
+    const C = W3.map(p => project(p, view, W, H))        // ועל המסך
     const base = colorOf(part, materials)
-    const sel = part.id === selId
+    const sel = selSet.has(part.id)
     FACES.forEach(([idx, key]) => {
       const pts = idx.map(i => C[i])
       const depth = pts.reduce((a, p) => a + p.depth, 0) / 4
-      faces.push({ pts, depth, base, key, part, sel })
+      // world נשמר כדי שאפשר יהיה להמיר לחיצה על הפאה לנקודה בעולם
+      faces.push({ pts, depth, base, key, part, sel, world: idx.map(i => W3[i]) })
     })
   })
   faces.sort((a, b) => b.depth - a.depth)
@@ -167,7 +182,7 @@ export function render(canvas, { parts, dims, materials, view, selId, guides }) 
     ctx.lineWidth = (fc.sel ? 2.5 : 1) * dpr
     ctx.strokeStyle = fc.sel ? '#EEC421' : 'rgba(0,0,0,.45)'
     ctx.stroke()
-    hit.push({ pts: fc.pts, depth: fc.depth, partId: fc.part.id })
+    hit.push({ pts: fc.pts, depth: fc.depth, partId: fc.part.id, world: fc.world })
   })
 
   // קווי הצמדה — נמתחים לרוחב הסצנה בציר שנצמד
@@ -189,8 +204,25 @@ export function render(canvas, { parts, dims, materials, view, selId, guides }) 
     ctx.restore()
   }
 
-  if (selId) {
-    const p = parts.find(x => x.id === selId)
+  // ---- סימוני ברגים ----
+  // מצוירים אחרי הכול ובלי בדיקת עומק: סימון שנעלם מאחורי לטה הוא
+  // סימון חסר תועלת. הצבע הוורוד הוא זה שבו שי מסמן בתצלומים.
+  marks.forEach((m, i) => {
+    const p = project(m.pos, view, W, H)
+    const r = 5.5 * dpr
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
+    ctx.fillStyle = '#FF3DBE'; ctx.fill()
+    ctx.lineWidth = 1.6 * dpr; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.stroke()
+    ctx.font = `700 ${8 * dpr}px Heebo, sans-serif`
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#fff'; ctx.fillText(String(i + 1), p.x, p.y + 0.5 * dpr)
+    ctx.textBaseline = 'alphabetic'
+  })
+
+  // התווית נכתבת רק לחלק בודד — על קוליסה שלמה זה היה ערימת טקסט
+  if (selSet.size === 1) {
+    const only = [...selSet][0]
+    const p = parts.find(x => x.id === only)
     if (p) {
       const c = project(p.pos, view, W, H)
       ctx.font = `700 ${13 * dpr}px Heebo, sans-serif`
@@ -204,11 +236,16 @@ export function render(canvas, { parts, dims, materials, view, selId, guides }) 
   return hit
 }
 
-export function hitTest(hits, x, y) {
+// הפאה הקדמית ביותר שנלחץ עליה, עם הפינות שלה בעולם
+export function hitFace(hits, x, y) {
   const found = hits.filter(f => pointInPoly(x, y, f.pts))
   if (!found.length) return null
   found.sort((a, b) => a.depth - b.depth)
-  return found[0].partId
+  return found[0]
+}
+
+export function hitTest(hits, x, y) {
+  return hitFace(hits, x, y)?.partId ?? null
 }
 
 // ============================================================
@@ -271,4 +308,82 @@ export function snapAlong(axis, part, dims, materials, parts, tol) {
   })
   if (!best) return null
   return { center: part.pos[axis] + best.delta, guide: best.guide }
+}
+
+// ============================================================
+// סימוני ברגים: מלחיצה על המסך לנקודה על הגוף
+// ============================================================
+
+// מערכת הצירים של המצלמה: אותו סיבוב ש-project עושה, בלי הפרספקטיבה.
+function toView(p, view) {
+  const x0 = p.x - view.target.x, y0 = p.y - view.target.y, z0 = p.z - view.target.z
+  const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw)
+  const x1 = x0 * cy - z0 * sy, z1 = x0 * sy + z0 * cy
+  const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch)
+  return { x: x1, y: y0 * cp - z1 * sp, z: y0 * sp + z1 * cp }
+}
+
+function fromView(q, view) {
+  const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch)
+  const y0 = q.y * cp + q.z * sp, z1 = -q.y * sp + q.z * cp
+  const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw)
+  return {
+    x: q.x * cy + z1 * sy + view.target.x,
+    y: y0 + view.target.y,
+    z: -q.x * sy + z1 * cy + view.target.z,
+  }
+}
+
+// לחיצה על המסך ← הנקודה על הפאה, במדויק.
+// קרן מהמצלמה דרך הפיקסל, חיתוך עם מישור הפאה, והצמדה לגבולות
+// המרובע. אינטרפולציה לינארית על המסך לא מספיקה כאן: בפרספקטיבה
+// אמצע הפאה על המסך אינו אמצע הפאה במציאות — על עמוד של 240 ס״מ
+// זו הייתה סטייה של 16 ס״מ בדיוק במרכז.
+export function pointOnFace(face, x, y, view, W, H) {
+  if (!face?.world || face.world.length !== 4 || !view) return null
+  const A = toView(face.world[0], view)
+  const B = toView(face.world[1], view)
+  const D = toView(face.world[3], view)
+  const e1 = { x: B.x - A.x, y: B.y - A.y, z: B.z - A.z }
+  const e2 = { x: D.x - A.x, y: D.y - A.y, z: D.z - A.z }
+  const n = {
+    x: e1.y * e2.z - e1.z * e2.y,
+    y: e1.z * e2.x - e1.x * e2.z,
+    z: e1.x * e2.y - e1.y * e2.x,
+  }
+
+  const f = Math.min(W, H) * 0.9
+  const u = (x - W / 2) / f, v = (H / 2 - y) / f
+  // הקרן: (u·t, v·t, dist − t). t הוא המרחק מהמצלמה לאורך הציר.
+  const den = n.x * u + n.y * v - n.z
+  if (!den) return null
+  const t = (n.x * A.x + n.y * A.y + n.z * A.z - n.z * view.dist) / den
+  if (!Number.isFinite(t) || t <= 0) return null
+  const P = { x: u * t, y: v * t, z: view.dist - t }
+
+  // הצמדה לתוך המרובע. פאה של תיבה היא מקבילית, ולכן הפירוק מדויק.
+  const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z
+  const d = { x: P.x - A.x, y: P.y - A.y, z: P.z - A.z }
+  const l1 = dot(e1, e1), l2 = dot(e2, e2)
+  const a1 = l1 ? Math.max(0, Math.min(1, dot(d, e1) / l1)) : 0
+  const a2 = l2 ? Math.max(0, Math.min(1, dot(d, e2) / l2)) : 0
+  const Q = {
+    x: A.x + e1.x * a1 + e2.x * a2,
+    y: A.y + e1.y * a1 + e2.y * a2,
+    z: A.z + e1.z * a1 + e2.z * a2,
+  }
+
+  const w = fromView(Q, view)
+  const r1 = k => Math.round(k * 10) / 10
+  return { x: r1(w.x), y: r1(w.y), z: r1(w.z) }
+}
+// הסימון שנלחץ עליו, אם יש כזה בטווח. לחיצה חוזרת מוחקת.
+export function markAt(marks, view, W, H, x, y, tolPx = 13) {
+  let best = null, bestD = Infinity
+  marks.forEach((m, i) => {
+    const p = project(m.pos, view, W, H)
+    const d = Math.hypot(p.x - x, p.y - y)
+    if (d < bestD) { bestD = d; best = i }
+  })
+  return bestD <= tolPx ? best : null
 }

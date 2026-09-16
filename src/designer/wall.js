@@ -7,7 +7,7 @@
 // ההעדפות משפיעות על הדירוג בלבד. שי בוחר.
 // ============================================================
 
-import { LIMITS, validateDims, KOSHRET, koshretLength } from './rules.js'
+import { LIMITS, validateDims, KOSHRET, koshretLength, CORNER, JOINT } from './rules.js'
 import { generateKulisa, LIMITS_PREFERRED, BRACE_DEFAULT, sectionOf } from './kulisa.js'
 import { cutList } from './cuts.js'
 import { rawLenOf } from './geometry.js'
@@ -291,6 +291,7 @@ export function wallParts(widths, height, {
     k.parts.forEach(p => parts.push({
       ...p,
       id: uid(),
+      k: k.index,                 // לאיזו קוליסה החלק שייך
       name: `ק${k.index} · ${p.name}`,
       len: String(r1(rawLenOf(p, kd))),
       pos: { ...p.pos, x: r1(p.pos.x + offset) },
@@ -307,6 +308,8 @@ export function wallParts(widths, height, {
     ;[['עליונה', r1(Number(height) - ph / 2)], ['תחתונה', r1(ph / 2)]].forEach(([at, y]) => {
       parts.push({
         id: uid(),
+        k: 0,                     // 0 = קושרת, לא שייכת לקוליסה אחת
+        seam: i + 1,              // התפר שהיא סוגרת
         invId: material?.id,
         name: `קושרת ${i + 1} ${at}`,
         axis: 'x',
@@ -320,4 +323,161 @@ export function wallParts(widths, height, {
   // והמספר הזה הוצג על המשטח.
   const joints = Math.max(0, built.length - 1)
   return { parts, dims, kulisot: built.length, koshret: joints * KOSHRET.perJoint }
+}
+
+// ============================================================
+// סידור הקיר: כנפיים בצדדים.
+// קוליסה זזה ומסתובבת כיחידה אחת. האורכים לא משתנים, ולכן
+// רשימת החיתוך והקנייה זהות לפני הסידור ואחריה — רק ההרכבה משתנה.
+// ============================================================
+
+const rr = n => Math.round(n * 10) / 10
+
+// ציר הסיבוב של קוליסה: הקצה הפנימי שלה, זה שפונה למרכז הקיר.
+// כנף שמתקפלת סביב החיבור לשכנה לא משאירה חור בתפר.
+export function groupPivot(group) {
+  if (!group.length) return { x: 0, z: 0 }
+  const xs = group.map(p => p.pos.x), zs = group.map(p => p.pos.z)
+  const minX = Math.min(...xs), maxX = Math.max(...xs)
+  const mid = (minX + maxX) / 2
+  return { x: mid >= 0 ? minX : maxX, z: (Math.min(...zs) + Math.max(...zs)) / 2 }
+}
+
+// הזזת נקודה בודדת עם הקוליסה שלה, ובחזרה. סימון בורג נשמר במצב
+// הישר של הקיר ומומר למקומו האמיתי בכל בנייה — אחרת פתיחת כנף
+// הייתה משאירה את הסימון תלוי באוויר במקום שבו הקוליסה כבר לא נמצאת.
+export function applyToPoint(p, t = {}, pivot = { x: 0, z: 0 }) {
+  const rad = (Number(t.deg) || 0) * Math.PI / 180
+  const c = Math.cos(rad), s = Math.sin(rad)
+  const ox = p.x - pivot.x, oz = p.z - pivot.z
+  return {
+    x: rr(pivot.x + ox * c - oz * s + (Number(t.dx) || 0)),
+    y: p.y,
+    z: rr(pivot.z + ox * s + oz * c + (Number(t.dz) || 0)),
+  }
+}
+
+export function unapplyFromPoint(p, t = {}, pivot = { x: 0, z: 0 }) {
+  const rad = -(Number(t.deg) || 0) * Math.PI / 180
+  const c = Math.cos(rad), s = Math.sin(rad)
+  const ox = p.x - (Number(t.dx) || 0) - pivot.x
+  const oz = p.z - (Number(t.dz) || 0) - pivot.z
+  return {
+    x: rr(pivot.x + ox * c - oz * s),
+    y: p.y,
+    z: rr(pivot.z + ox * s + oz * c),
+  }
+}
+
+// סיבוב והזזה של קבוצת חלקים סביב ציר נתון.
+export function transformGroup(parts, ids, { dx = 0, dz = 0, deg = 0 } = {}, pivot) {
+  const set = ids instanceof Set ? ids : new Set(ids)
+  if (!set.size) return parts
+  const rad = (Number(deg) || 0) * Math.PI / 180
+  const c = Math.cos(rad), sn = Math.sin(rad)
+  const p0 = pivot || groupPivot(parts.filter(p => set.has(p.id)))
+  return parts.map(p => {
+    if (!set.has(p.id)) return p
+    const ox = p.pos.x - p0.x, oz = p.pos.z - p0.z
+    return {
+      ...p,
+      yaw: (Number(p.yaw) || 0) + rad,
+      pos: {
+        ...p.pos,
+        x: rr(p0.x + ox * c - oz * sn + Number(dx || 0)),
+        z: rr(p0.z + ox * sn + oz * c + Number(dz || 0)),
+      },
+    }
+  })
+}
+
+// הקיר על המשטח אחרי סידור. נבנה כל פעם מחדש מהמצב הישר ומהסידור
+// המבוקש, ולא מצטבר על עצמו — לחיצה שישית על "סובב" מסתובבת סביב
+// אותו ציר כמו הראשונה, ו"החזר למקום" הוא פשוט סידור ריק.
+// כל תפר בקיר, ומה מחזיק אותו.
+//   ברגים — בכל תפר, תמיד. זה החיבור.
+//   קושרת — בתפר ישר בלבד, וניתנת לביטול. על פינה היא לא יושבת.
+// joints[i] = { koshret: false } מבטל את הקושרות של תפר i.
+export function seamsOf(count, layout = {}, joints = {}) {
+  const at = k => {
+    const t = layout[k] || {}
+    return { deg: Number(t.deg) || 0, dx: Number(t.dx) || 0, dz: Number(t.dz) || 0 }
+  }
+  const out = []
+  for (let i = 1; i < count; i++) {
+    const a = at(i), b = at(i + 1)
+    const angle = rr(b.deg - a.deg)
+    const apart = a.dx !== b.dx || a.dz !== b.dz
+    const corner = !!(angle || apart)
+    // על פינה אין קושרת גם אם ביקשו — אין מישור משותף שהיא תשב עליו.
+    const wanted = joints[i]?.koshret
+    const koshret = corner ? false : (wanted === undefined ? JOINT.koshretByDefault : !!wanted)
+    out.push({
+      seam: i,
+      between: [i, i + 1],
+      corner, angle, apart, koshret,
+      bolts: corner ? CORNER.bolts : JOINT.bolts,
+      canToggleKoshret: !corner,
+    })
+  }
+  return out
+}
+
+export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) {
+  const base = wallParts(widths, height, opts)
+  if (!base.parts.length) {
+    return { ...base, groups: [], seams: [], corners: [], bolts: 0, koshretDropped: 0 }
+  }
+
+  const seams = seamsOf(base.kulisot, layout, joints)
+  const corners = seams.filter(s => s.corner)
+  const noKoshret = new Set(seams.filter(s => !s.koshret).map(s => s.seam))
+  const kept = noKoshret.size
+    ? base.parts.filter(p => !(p.k === 0 && noKoshret.has(p.seam)))
+    : base.parts
+
+  const byK = new Map()
+  for (const p of kept) {
+    const k = Number(p.k) || 0
+    if (!byK.has(k)) byK.set(k, [])
+    byK.get(k).push(p)
+  }
+
+  const [faceCm] = opts.material ? sectionOf(opts.material) : [2, 4]
+
+  let parts = kept
+  for (const [k, group] of byK) {
+    const t = layout[k]
+    if (!t || (!t.dx && !t.dz && !t.deg)) continue
+    // הציר נלקח מהמצב הישר, לפני כל סיבוב — לכן הוא יציב.
+    parts = transformGroup(parts, group.map(p => p.id), t, groupPivot(group))
+  }
+
+  // הקוליסות לפי הסדר, והקושרות בסוף — הן לא חלק מהרצף.
+  const groups = [...byK.entries()]
+    .sort((a, b) => (a[0] || Infinity) - (b[0] || Infinity))
+    .map(([k, group]) => ({
+      k,
+      count: group.length,
+      label: k === 0 ? `קושרות` : `ק${k}`,
+      width: k === 0 ? null : widthOfGroup(group, faceCm),
+      pivot: groupPivot(group),          // במצב הישר — יציב בין בנייה לבנייה
+      moved: !!layout[k] && !!(layout[k].dx || layout[k].dz || layout[k].deg),
+    }))
+
+  const koshret = kept.filter(p => p.k === 0).length
+  return {
+    ...base, parts, groups, koshret, seams, corners,
+    bolts: seams.reduce((n, s) => n + s.bolts, 0),
+    // כמה קושרות ירדו, כדי שאפשר יהיה להסביר את ההפרש ברשימת החיתוך
+    koshretDropped: base.koshret - koshret,
+  }
+}
+// רוחב הקוליסה לפי האנכיות שלה, בלי להסתמך על סדר הקלט
+function widthOfGroup(group, faceCm) {
+  const v = group.filter(p => p.axis === 'y')
+  if (v.length < 2) return null
+  const xs = v.map(p => p.pos.x)
+  // מרכזי האנכיות מרוחקים רוחב−פאה זה מזה.
+  return rr(Math.max(...xs) - Math.min(...xs) + faceCm)
 }
