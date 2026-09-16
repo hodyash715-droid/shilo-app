@@ -340,7 +340,12 @@ export function wallParts(widths, height, {
   // Math.max: קיר בלי אף קוליסה תקינה נתן (0-1)*2 = מינוס שתי קושרות,
   // והמספר הזה הוצג על המשטח.
   const joints = Math.max(0, built.length - 1)
-  return { parts, dims, kulisot: built.length, koshret: joints * KOSHRET.perJoint }
+  // מיקום כל תפר במצב הישר. משמש לבדוק אם הסידור השאיר אותו שלם.
+  const seamXs = []
+  for (let i = 0; i < built.length - 1; i++) {
+    seamXs.push(r1(-totalWidth / 2 + built[i].start + built[i].width))
+  }
+  return { parts, dims, seamXs, kulisot: built.length, koshret: joints * KOSHRET.perJoint }
 }
 
 // ============================================================
@@ -425,8 +430,25 @@ export function transformGroup(parts, ids, { dx = 0, dz = 0, dy = 0, deg = 0 } =
 //   ברגים — בכל תפר, תמיד. זה החיבור.
 //   קושרת — בתפר ישר בלבד, וניתנת לביטול. על פינה היא לא יושבת.
 // joints[i] = { koshret: false } מבטל את הקושרות של תפר i.
-export function seamsOf(count, layout = {}, joints = {}) {
+// geom = { frames: { [k]: { t, pivot } }, seamXs: [] } — כשהוא נמסר,
+// התפר נבחן לפי מה שקרה בפועל ולא לפי הפרמטרים. שתי קוליסות שסובבו
+// באותה זווית סביב צירים שונים נפרדות זו מזו, והשוואת מספרים הייתה
+// מכריזה עליהן "ישר" ושולחת קושרת של 50 לגשר על מטר וחצי.
+export function seamsOf(count, layout = {}, joints = {}, geom = null) {
   const at = k => normalizeT(layout[k])
+
+  // האם התפר נשאר שלם: אותה זווית, ושתי הקוליסות ממפות את נקודת
+  // התפר לאותו מקום בדיוק.
+  const intact = (i) => {
+    const a = at(i), b = at(i + 1)
+    if (rr(b.deg - a.deg)) return false
+    const fa = geom?.frames?.[i], fb = geom?.frames?.[i + 1]
+    if (!fa || !fb) return a.dx === b.dx && a.dz === b.dz && a.dy === b.dy
+    const p = { x: geom.seamXs?.[i - 1] ?? 0, y: 0, z: 0 }
+    const A = applyToPoint(p, fa.t, fa.pivot)
+    const B = applyToPoint(p, fb.t, fb.pivot)
+    return Math.hypot(A.x - B.x, A.y - B.y, A.z - B.z) < 0.5
+  }
   const clampBolts = n => {
     const [lo, hi] = JOINT.boltsRange
     const v = Math.round(Number(n))
@@ -436,8 +458,8 @@ export function seamsOf(count, layout = {}, joints = {}) {
   for (let i = 1; i < count; i++) {
     const a = at(i), b = at(i + 1)
     const angle = rr(b.deg - a.deg)
-    const apart = a.dx !== b.dx || a.dz !== b.dz || a.dy !== b.dy
-    const corner = !!(angle || apart)
+    const corner = !intact(i)
+    const apart = corner && !angle
     // על פינה אין קושרת גם אם ביקשו — אין מישור משותף שהיא תשב עליו.
     const wanted = joints[i]?.koshret
     const koshret = corner ? false : (wanted === undefined ? JOINT.koshretByDefault : !!wanted)
@@ -459,7 +481,21 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
     return { ...base, groups: [], seams: [], corners: [], bolts: 0, koshretDropped: 0 }
   }
 
-  const seams = seamsOf(base.kulisot, layout, joints)
+  // המסגרות של כל קוליסה: הסידור שלה והציר שלה. התפרים נבחנים מולן.
+  const frames = {}
+  {
+    const straight = new Map()
+    for (const p of base.parts) {
+      const k = Number(p.k) || 0
+      if (!k) continue
+      if (!straight.has(k)) straight.set(k, [])
+      straight.get(k).push(p)
+    }
+    for (const [k, group] of straight) {
+      frames[k] = { t: normalizeT(layout[k]), pivot: groupPivot(group) }
+    }
+  }
+  const seams = seamsOf(base.kulisot, layout, joints, { frames, seamXs: base.seamXs })
   const corners = seams.filter(s => s.corner)
   const noKoshret = new Set(seams.filter(s => !s.koshret).map(s => s.seam))
   const kept = noKoshret.size
@@ -482,6 +518,20 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
     if (!t.dx && !t.dz && !t.dy && !t.deg) continue
     // הציר נלקח מהמצב הישר, לפני כל סיבוב — לכן הוא יציב.
     parts = transformGroup(parts, group.map(p => p.id), t, groupPivot(group))
+  }
+
+  // קושרת שייכת לתפר. אם התפר נשאר שלם והקוליסות שלו זזו — הקושרת
+  // זזה איתן. בלי זה כותרת של שער עולה למעלה והקושרות נשארות על
+  // הרצפה, מרחפות מתחת לכלום.
+  for (const sm of seams) {
+    if (sm.corner || !sm.koshret) continue
+    const fr = frames[sm.between[0]]
+    if (!fr || (!fr.t.dx && !fr.t.dz && !fr.t.dy && !fr.t.deg)) continue
+    parts = parts.map(p => (
+      p.k === 0 && p.seam === sm.seam
+        ? { ...p, yaw: (Number(p.yaw) || 0) + fr.t.deg * Math.PI / 180, pos: applyToPoint(p.pos, fr.t, fr.pivot) }
+        : p
+    ))
   }
 
   // הקוליסות לפי הסדר, והקושרות בסוף — הן לא חלק מהרצף.

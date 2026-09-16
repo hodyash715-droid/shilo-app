@@ -9,6 +9,7 @@ import { wallProposals, assembleWall } from '../designer/wall.js'
 import { LIMITS, KOSHRET } from '../designer/rules.js'
 import { LIMITS_PREFERRED, sectionOf } from '../designer/kulisa.js'
 import { optimize } from '../designer/cuts.js'
+import { TEMPLATES, TEMPLATE_DEFAULTS, FIELD_LABELS, templateById } from '../designer/templates.js'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const mk = (width, height) => ({ id: uid(), width: String(width ?? ''), height: String(height ?? '') })
@@ -31,6 +32,29 @@ export default function WallBuilder({
   const [perHeight, setPerHeight] = useState(
     () => !!initial?.kulisot?.some(k => Number(k.height) > 0)
   )
+  // התבנית מייצרת את הצורה מראש — רוחבים, גבהים והסידור — כדי שמה
+  // שנפתח על המשטח ובאולפן כבר יהיה קרוב למה שרוצים.
+  const [tplId, setTplId] = useState(null)
+  const [tplVals, setTplVals] = useState({})
+  // הסידור שהתבנית קבעה. נשלח יחד עם הקיר, ומתאפס ברגע שנוגעים בשורות.
+  const [seedLayout, setSeedLayout] = useState(initial?.layout || null)
+
+  const pickTemplate = (id) => {
+    setTplId(id)
+    setTplVals(TEMPLATE_DEFAULTS[id] || {})
+  }
+  const applyTemplate = () => {
+    const t = templateById(tplId)
+    if (!t) return
+    const out = t.build({ ...TEMPLATE_DEFAULTS[tplId], ...tplVals })
+    if (!out.rows.length) return
+    setKulisot(out.rows.map(r => mk(r.width, r.height)))
+    if (out.rows.some(r => r.height)) setPerHeight(true)
+    setHeight(out.height)
+    setSeedLayout(Object.keys(out.layout).length ? out.layout : null)
+    if (!name.trim()) setName(`${t.name} ${out.height}×${out.rows.reduce((a, r) => a + r.width, 0)}`)
+    setTplId(null)
+  }
   const [view, setView] = useState('build')   // build | cuts | load
 
   const widths = kulisot.map(k => num(k.width))
@@ -73,26 +97,30 @@ export default function WallBuilder({
     [wall, materials, kerfCm]
   )
 
+  // סידור של תבנית תקף רק לשורות שהיא יצרה. ברגע שמוסיפים, מוחקים
+  // או מזיזים שורה, המספרים מצביעים על קוליסות אחרות — והוא נמחק.
+  const dropSeed = () => setSeedLayout(null)
   const set = (id, width) => setKulisot(ks => ks.map(k => k.id === id ? { ...k, width } : k))
-  const add = (w) => setKulisot(ks => [...ks, mk(w ?? ks.at(-1)?.width ?? 120)])
-  const dup = (id) => setKulisot(ks => {
+  const add = (w) => { dropSeed(); setKulisot(ks => [...ks, mk(w ?? ks.at(-1)?.width ?? 120)]) }
+  const dup = (id) => { dropSeed(); setKulisot(ks => {
     const i = ks.findIndex(k => k.id === id)
     return [...ks.slice(0, i + 1), mk(ks[i].width), ...ks.slice(i + 1)]
-  })
-  const del = (id) => setKulisot(ks => ks.length > 1 ? ks.filter(k => k.id !== id) : ks)
-  const move = (id, dir) => setKulisot(ks => {
+  }) }
+  const del = (id) => { dropSeed(); setKulisot(ks => ks.length > 1 ? ks.filter(k => k.id !== id) : ks) }
+  const move = (id, dir) => { dropSeed(); setKulisot(ks => {
     const i = ks.findIndex(k => k.id === id)
     const j = i + dir
     if (j < 0 || j >= ks.length) return ks
     const c = [...ks]
     ;[c[i], c[j]] = [c[j], c[i]]
     return c
-  })
+  }) }
 
   const suggest = () => {
     const r = wallProposals(target, height)
     if (!r.ok || !r.proposals.length) return
-    setKulisot(r.proposals[0].widths.map(mk))
+    dropSeed()
+    setKulisot(r.proposals[0].widths.map(w => mk(w)))
   }
 
   const save = () => {
@@ -103,6 +131,7 @@ export default function WallBuilder({
       kulisot: specs.map(sp => (
         typeof sp === 'object' ? { width: sp.width, height: sp.height } : { width: sp }
       )),
+      layout: seedLayout,
       overlapCm: overlap,
       totalWidth: total,
       jobId,
@@ -178,6 +207,46 @@ export default function WallBuilder({
         {wall && <> · <span className="mono">{wall.koshret.count}</span> קושרות של <span className="mono">{wall.koshret.lengthCm}</span></>}
         {perHeight && tallest > Number(height) && <> · גובה עד <span className="mono">{tallest}</span></>}
         <br />לכל קוליסה: <span className="mono">{braces}</span> חיזוקים · גיבן {giben ? 'כן' : 'לא'} — נקבע במסך הקוליסה
+      </div>
+
+      {/* תבניות: הצורה מוכנה לפני שנכנסים למשטח ולאולפן */}
+      <div className="card" style={{ padding: 11, marginBottom: 12, background: 'var(--bg2, var(--card))' }}>
+        <div className="t-meta" style={{ marginBottom: 7 }}>התחל מצורה מוכנה</div>
+        <div className="row gap-2 wrap">
+          {TEMPLATES.map(t => (
+            <button key={t.id} className="btn btn-sm" onClick={() => pickTemplate(t.id)}
+              style={{
+                minHeight: 34,
+                background: tplId === t.id ? 'var(--gold-bg)' : 'var(--card)',
+                color: tplId === t.id ? 'var(--gold-fg)' : 'var(--ink70)',
+                borderColor: tplId === t.id ? 'var(--gold)' : 'var(--line)',
+              }}>{t.name}</button>
+          ))}
+        </div>
+        {tplId && (() => {
+          const t = templateById(tplId)
+          return (
+            <div style={{ marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+              <div className="t-meta" style={{ marginBottom: 7 }}>{t.hint}</div>
+              <div style={{ display: 'grid', gap: 7 }}>
+                {t.fields.map(f => (
+                  <div key={f} className="row gap-2">
+                    <span className="t-meta" style={{ flex: '0 0 84px' }}>{FIELD_LABELS[f]}</span>
+                    <input className="field mono" type="number" inputMode="decimal" dir="ltr"
+                      style={{ height: 34, flex: 1, minWidth: 0 }}
+                      value={tplVals[f] ?? TEMPLATE_DEFAULTS[tplId][f] ?? ''}
+                      onChange={e => setTplVals(v => ({ ...v, [f]: Number(e.target.value) }))} />
+                    <span className="t-meta" style={{ flex: '0 0 auto' }}>ס״מ</span>
+                  </div>
+                ))}
+              </div>
+              <div className="row gap-2" style={{ marginTop: 10 }}>
+                <button className="btn btn-solid grow" onClick={applyTemplate}>בנה {t.name}</button>
+                <button className="btn" onClick={() => setTplId(null)}>ביטול</button>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       <div className="row gap-2" style={{ marginBottom: 12 }}>
@@ -323,7 +392,7 @@ export default function WallBuilder({
 
       <div className="row gap-2" style={{ marginTop: 12 }}>
         <button className="btn btn-solid grow" disabled={!wall}
-          onClick={() => onShowWall?.(specs, Number(height), overlap)}>
+          onClick={() => onShowWall?.(specs, Number(height), overlap, seedLayout)}>
           🏗️ הצג את הקיר על המשטח
         </button>
       </div>

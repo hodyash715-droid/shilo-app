@@ -221,12 +221,37 @@ test('פינה מדווחת עם הזווית שלה, ותפר ישר לא', () 
   assert.equal(build().corners.length, 0)
 })
 
-test('שתי קוליסות שמסתובבות יחד לא שוברות את התפר ביניהן', () => {
+test('שתי קוליסות שמסתובבות באותה זווית כן נפרדות — כל אחת סביב הציר שלה', () => {
+  // הבדיקה הזו קידדה בעבר טעות: היא השוותה מספרים ולא גיאומטריה,
+  // והכריזה על התפר "ישר" בזמן שהקוליסות רחוקות זו מזו יותר ממטר.
   const r = build({ 3: { deg: -90 }, 4: { deg: -90 } })
-  assert.deepEqual(r.corners.map(c => c.between), [[2, 3]])
-  // התפר בין ק3 לק4 נשאר ישר, והקושרות שלו נשארות
-  assert.equal(r.koshretDropped, KOSHRET.perJoint)
-  assert.equal(r.seams.find(x => x.seam === 3).koshret, true)
+  const x = k => {
+    const v = r.parts.filter(p => p.k === k).map(p => p.pos.x)
+    return [Math.min(...v), Math.max(...v)]
+  }
+  const gap = x(4)[0] - x(3)[1]
+  assert.ok(gap > 50, `ק3 וק4 רחוקות ${gap} ולא ${gap} — הן לא צמודות`)
+  assert.ok(r.seams.find(s => s.seam === 3).corner, 'תפר פרוד דווח כישר')
+  assert.equal(r.seams.find(s => s.seam === 3).koshret, false)
+  // תפר 1-2 נשאר שלם (שתיהן לא זזו); שניים נשברו
+  assert.equal(r.koshret, KOSHRET.perJoint)
+  assert.deepEqual(r.seams.filter(s => s.corner).map(s => s.seam), [2, 3])
+})
+
+test('התפר נשאר שלם רק כשהקוליסות באמת נשארות צמודות', () => {
+  // הזזה זהה של שתיהן — התפר שלם, והקושרת נוסעת איתן
+  const r = build({ 3: { dz: 40 }, 4: { dz: 40 } })
+  const seam = r.seams.find(s => s.seam === 3)
+  assert.equal(seam.corner, false)
+  assert.equal(seam.koshret, true)
+  const ko = r.parts.filter(p => p.k === 0 && p.seam === 3)
+  assert.equal(ko.length, KOSHRET.perJoint)
+  const flat = build()
+  const flatKo = flat.parts.filter(p => p.k === 0 && p.seam === 3)
+  for (let i = 0; i < ko.length; i++) {
+    assert.ok(Math.abs(ko[i].pos.z - flatKo[i].pos.z - 40) < 0.2,
+      `הקושרת לא נסעה עם התפר: ${ko[i].pos.z} מול ${flatKo[i].pos.z}`)
+  }
 })
 
 test('הזזה שמרחיקה קוליסה משכנתה גם היא פותחת פינה', () => {

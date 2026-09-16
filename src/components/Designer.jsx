@@ -392,17 +392,20 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     }
   }
 
-  const showWallOnCanvas = (widths, wallH, overlapCm) => {
+  const showWallOnCanvas = (widths, wallH, overlapCm, seedLayout) => {
     if (parts.length && !confirm('פעולה זו מחליפה את כל החלקים שעל המשטח. להמשיך?')) return
     const base = { widths: widths.map(w => (w && typeof w === 'object' ? { ...w } : w)), height: Number(wallH), overlapCm, prod: prodNow() }
-    const r = wallLayout(base.widths, base.height, { ...wallOpts(base.prod), overlapCm }, {}, {})
+    // הסידור שהתבנית קבעה הוא נקודת הפתיחה, לא כלוב: משם ממשיכים
+    // לגרור ולסובב כרגיל.
+    const layout = seedLayout && typeof seedLayout === 'object' ? seedLayout : {}
+    const r = wallLayout(base.widths, base.height, { ...wallOpts(base.prod), overlapCm }, layout, {})
     if (!r.parts.length) return
     snapshot()
     setDims(r.dims)
     setParts(r.parts)
     setSel(null); setSelK(null); setGuides([]); setPanel(null)
     setWallView({
-      base, layout: {}, joints: {}, groups: r.groups,
+      base, layout, joints: {}, groups: r.groups,
       seams: r.seams, bolts: r.bolts, koshretDropped: r.koshretDropped,
       kulisot: r.kulisot, koshret: r.koshret, width: r.dims.רוחב,
     })
@@ -560,6 +563,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
         height: k.preview.גובה || 240,
         kulisot: Array.isArray(k.parts) ? k.parts : [],
         overlapCm: k.preview.overlapCm,
+        layout: k.preview.wall?.layout || null,
         jobId: k.job_id || null,
       })
       setPanel('wall')

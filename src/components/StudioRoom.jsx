@@ -99,13 +99,18 @@ export default function StudioRoom({ name, parts, dims, materials, marks, wallVi
           <div className="studio-viewbar" role="group" aria-label="מבט מצלמה">
             {VIEWS.map(([id, label]) => <button key={id} type="button" aria-pressed={view === id} onClick={() => cameraView(id)}>{label}</button>)}
           </div>
+          {/* המתג ישב בפאנל מתחת לחדר, ומי שלא גלל לא ידע שאפשר לגרור בכלל. */}
+          <div className="studio-modebar studio-segment" role="group" aria-label="מצב עבודה">
+            <button type="button" aria-pressed={mode === 'orbit'} onClick={() => setMode('orbit')}>↻ סיבוב מבט</button>
+            <button type="button" aria-pressed={mode === 'edit'} onClick={() => { setMode('edit'); setRotate(false) }}>✥ גרירת חלקים</button>
+          </div>
           <div className="studio-scale"><b dir="ltr">{format(bounds.size[0])} × {format(bounds.size[1])} × {format(bounds.size[2])}</b><span>רוחב × גובה × עומק · מטר</span></div>
           <div className="studio-zoom" role="group" aria-label="זום">
             <button type="button" aria-label="התקרבות" onClick={() => scene.current?.zoom(0.82)}>+</button>
             <button type="button" aria-label="התאמת העיצוב למסך" onClick={() => cameraView('perspective')}>⌖</button>
             <button type="button" aria-label="התרחקות" onClick={() => scene.current?.zoom(1.22)}>−</button>
           </div>
-          <div className="studio-help">{mode === 'edit' ? 'גררו רכיב על הרצפה · בחירה מציגה כלי הזזה וסיבוב' : 'גרירת רקע לסיבוב · גלגלת או צביטה לזום · שתי אצבעות להזזת המבט'}</div>
+          <div className="studio-help">{mode === 'edit' ? 'גררו חלק על הרצפה · בחירה מציגה כלי הזזה וסיבוב' : 'גרירה לסיבוב · צביטה לזום · ל“גרירת חלקים” עברו במתג למעלה'}</div>
           {(!ready || error) && <div className="studio-status" role="status"><div><span className="studio-status-icon">◇</span><h3>{error ? 'התצוגה אינה זמינה' : 'מכינים את האולפן…'}</h3><p>{error || 'העיצוב הנוכחי נטען לתוך החדר'}</p>{error && <button onClick={onClose}>חזרה למעצב</button>}</div></div>}
           {ready && !error && !items.length && <div className="studio-status studio-empty"><div><h3>האולפן מוכן לעיצוב שלך</h3><p>הוסיפו קוליסה, קיר או חלק במעצב, ופתחו כאן את התוצאה.</p><button onClick={onClose}>חזרה למעצב</button></div></div>}
         </main>

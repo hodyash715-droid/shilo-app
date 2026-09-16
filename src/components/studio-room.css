@@ -30,6 +30,11 @@
 .studio-stage-heading { position: absolute; top: 25px; left: 28px; display: flex; align-items: center; gap: 9px; direction: ltr; font: 500 10px/1.4 'Azeret Mono', monospace; letter-spacing: 2px; color: #515b50; pointer-events: none; }
 .studio-live-dot { display: inline-block; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: #628664; }
 .studio-stage-separator { color: #9c9f92; margin-inline: 6px; }
+/* המתג יושב מתחת לבורר המבטים, באותו צד — שם העין כבר נמצאת. */
+.studio-modebar { position: absolute; top: 62px; right: 18px; padding: 4px; display: flex; gap: 4px; background: #fdfcf6e8; border: 1px solid #d9d9ce; border-radius: 11px; box-shadow: 0 3px 18px #212d1e0a; }
+.studio-modebar button { min-height: 32px; padding: 5px 12px; font-size: 12px; border-color: transparent; background: transparent; }
+@media (max-width: 700px) { .studio-modebar { top: 58px; right: 12px; left: 12px; justify-content: center; } }
+
 .studio-viewbar { position: absolute; top: 16px; right: 18px; padding: 4px; display: flex; background: #fdfcf6e8; border: 1px solid #d9d9ce; border-radius: 11px; box-shadow: 0 3px 18px #212d1e0a; }
 .studio-viewbar button { border-color: transparent; min-height: 32px; padding: 5px 13px; font-size: 12px; background: transparent; }
 .studio-room button[aria-pressed='true'] { background: #293b30; color: #fff; border-color: #293b30; }

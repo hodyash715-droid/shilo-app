@@ -11,7 +11,7 @@ import { wallLayout, wallParts, kulisaSpec, assembleWall } from '../src/designer
 import { defaultFrameMaterial } from '../src/designer/kulisa.js'
 import { materialsFor } from '../src/designer/materials.js'
 import { cutList } from '../src/designer/cuts.js'
-import { JOINT, LIMITS } from '../src/designer/rules.js'
+import { JOINT, LIMITS, KOSHRET } from '../src/designer/rules.js'
 import { rawLenOf } from '../src/designer/geometry.js'
 
 const MATS = materialsFor([])
@@ -187,4 +187,26 @@ test('הרמה שלילית גם לא נספרת כסידור ולא שוברת 
   assert.equal(r.groups.find(g => g.k === 2).moved, false)
   assert.ok(r.seams.every(s => !s.corner))
   assert.equal(r.koshret, wallLayout(GATE, 240, OPTS).koshret)
+})
+
+// ---- הקושרת שייכת לתפר, לא לרצפה ----
+
+test('בשער, הקושרת של הכותרת עולה יחד איתה', () => {
+  const g = wallLayout(GATE, 240, OPTS, RAISE)
+  // תפר 1-2 ו-2-3 הם פינות (רק הכותרת האמצעית מורמת), אז אין להם קושרת
+  assert.ok(g.parts.filter(p => p.k === 0).every(p => p.pos.y >= 180),
+    'קושרת נשארה על הרצפה מתחת לכותרת מורמת')
+})
+
+test('שער עם כותרת מפוצלת לשתיים: הקושרת שביניהן עולה, ואינה מרחפת', () => {
+  const spec = [{ width: 60 }, { width: 90, height: 60 }, { width: 90, height: 60 }, { width: 60 }]
+  const r = wallLayout(spec, 240, OPTS, { 2: { dy: 180 }, 3: { dy: 180 } })
+  const inner = r.seams.find(s => s.seam === 2)
+  assert.equal(inner.corner, false, 'שתי חציי הכותרת נשארות צמודות')
+  assert.equal(inner.koshret, true)
+  const ko = r.parts.filter(p => p.k === 0)
+  assert.equal(ko.length, KOSHRET.perJoint)
+  assert.ok(ko.every(p => p.pos.y >= 180), `קושרת ב-${ko.map(p => p.pos.y)} במקום למעלה`)
+  // והתפרים אל הרגליים הם פינות
+  assert.deepEqual(r.seams.filter(s => s.corner).map(s => s.seam), [1, 3])
 })
