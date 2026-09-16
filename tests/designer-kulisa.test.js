@@ -5,11 +5,11 @@ import { cutList } from '../src/designer/cuts.js'
 import { invalidParts, innerWidth, VERTICAL_FACE_CM, GIBEN, gibenMemberCount } from '../src/designer/rules.js'
 import { materialsFor } from '../src/designer/materials.js'
 
-const MAT = { id: 'm1', name: 'לטה 2×3', stock_len: 300, category: 'material' }
+const MAT = { id: 'm1', name: 'לטה 4×2', stock_len: 300, category: 'material' }
 const gen = (o) => generateKulisa({ material: MAT, width: 120, height: 240, ...o })
 
 test('חתך נגזר משם החומר, לא ממספר קבוע', () => {
-  assert.deepEqual(sectionOf(MAT), [2, 3])
+  assert.deepEqual(sectionOf(MAT), [2, 4])
   assert.deepEqual(sectionOf({ id: 'x', name: 'קורה 5×10' }), [5, 10])
 })
 
@@ -163,4 +163,25 @@ test('כל גיבן יושב בגובה אחד — הלטות נבדלות בע�
   assert.equal(top.length, GIBEN.membersEach)
   assert.equal(new Set(top.map(p => p.pos.y)).size, 1, 'אותו גובה')
   assert.equal(new Set(top.map(p => p.pos.z)).size, GIBEN.membersEach, 'עומק שונה')
+})
+
+// ---------- באג הכיוון: סדר המספרים בשם לא קובע ----------
+// "לטה 4×2" נתנה פנימי 112 במקום 116, כי profileOf לקח את המספר הראשון.
+// הלטה מונחת עם הצלע הצרה לחזית, ולכן 4×2 ו-2×4 הם אותו עץ.
+test('סדר הצלעות בשם החומר לא משנה את החישוב', () => {
+  const a = { id: 'a', name: 'לטה 4×2', stock_len: 300 }
+  const b = { id: 'b', name: 'לטה 2×4', stock_len: 300 }
+  assert.deepEqual(sectionOf(a), sectionOf(b))
+  assert.deepEqual(sectionOf(a), [2, 4])
+  assert.equal(generateKulisa({ width: 120, height: 240, material: a }).plan.inner, 116)
+  assert.equal(generateKulisa({ width: 120, height: 240, material: b }).plan.inner, 116)
+})
+
+test('לטה 4×2 מקיימת את הכלל שאושר בכל הרוחבים', () => {
+  const lata = { id: 'l', name: 'לטה 4×2', stock_len: 300 }
+  for (const w of [40, 60, 80, 100, 120, 150]) {
+    const r = generateKulisa({ width: w, height: 240, material: lata })
+    assert.equal(r.plan.inner, innerWidth(w), `רוחב ${w}`)
+    assert.equal(r.warnings.some(x => /שאושרו/.test(x)), false, `רוחב ${w} הזהיר על סטייה`)
+  }
 })

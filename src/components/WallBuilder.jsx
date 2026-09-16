@@ -1,0 +1,276 @@
+// ============================================================
+// הרכבת קיר. לא מחשבון — כלי הרכבה.
+// מוסיפים קוליסות, מחברים בקושרות, ומקבלים מה יוצא לעבודה:
+// מה עולה על הרכב, כמה חיתוכים, וכמה עץ לקנות.
+// ============================================================
+
+import React, { useMemo, useState } from 'react'
+import { wallProposals, assembleWall } from '../designer/wall.js'
+import { LIMITS, KOSHRET } from '../designer/rules.js'
+import { LIMITS_PREFERRED } from '../designer/kulisa.js'
+import { optimize } from '../designer/cuts.js'
+
+const uid = () => Math.random().toString(36).slice(2, 10)
+const mk = (width) => ({ id: uid(), width })
+
+export default function WallBuilder({
+  materials, material, kerfCm, braces, giben,
+  jobs = [], onOpenKulisa, onSaveWall, initial,
+}) {
+  const [name, setName] = useState(initial?.name || '')
+  const [height, setHeight] = useState(initial?.height || 240)
+  const [kulisot, setKulisot] = useState(
+    initial?.kulisot?.length ? initial.kulisot.map(k => mk(k.width)) : [mk(120), mk(120)]
+  )
+  const [overlap, setOverlap] = useState(initial?.overlapCm || KOSHRET.overlapCm)
+  const [jobId, setJobId] = useState(initial?.jobId || null)
+  const [target, setTarget] = useState(540)
+  const [view, setView] = useState('build')   // build | cuts | load
+
+  const widths = kulisot.map(k => Number(k.width) || 0)
+  const total = widths.reduce((a, b) => a + b, 0)
+  const bad = kulisot.filter(k => !(Number(k.width) > 0) || Number(k.width) > LIMITS.maxWidth)
+
+  const wall = useMemo(() => {
+    if (bad.length || !kulisot.length || !(height > 0) || !material) return null
+    return assembleWall(widths, Number(height), { material, materials, braces, giben, overlapCm: overlap })
+  }, [widths.join(','), height, material, materials, braces, giben, overlap, bad.length])
+
+  const plans = useMemo(
+    () => (wall ? optimize(wall.rows, materials, {}, kerfCm) : []),
+    [wall, materials, kerfCm]
+  )
+
+  const set = (id, width) => setKulisot(ks => ks.map(k => k.id === id ? { ...k, width } : k))
+  const add = (w) => setKulisot(ks => [...ks, mk(w ?? ks.at(-1)?.width ?? 120)])
+  const dup = (id) => setKulisot(ks => {
+    const i = ks.findIndex(k => k.id === id)
+    return [...ks.slice(0, i + 1), mk(ks[i].width), ...ks.slice(i + 1)]
+  })
+  const del = (id) => setKulisot(ks => ks.length > 1 ? ks.filter(k => k.id !== id) : ks)
+  const move = (id, dir) => setKulisot(ks => {
+    const i = ks.findIndex(k => k.id === id)
+    const j = i + dir
+    if (j < 0 || j >= ks.length) return ks
+    const c = [...ks]
+    ;[c[i], c[j]] = [c[j], c[i]]
+    return c
+  })
+
+  const suggest = () => {
+    const r = wallProposals(target, height)
+    if (!r.ok || !r.proposals.length) return
+    setKulisot(r.proposals[0].widths.map(mk))
+  }
+
+  const save = () => {
+    if (!wall) return
+    onSaveWall?.({
+      name: name.trim() || `קיר ${total}×${height}`,
+      height: Number(height),
+      kulisot: widths.map(width => ({ width })),
+      overlapCm: overlap,
+      totalWidth: total,
+      jobId,
+    })
+  }
+
+  const tab = (id, label) => (
+    <button key={id} className="btn btn-sm" onClick={() => setView(id)} style={{
+      flex: 1,
+      background: view === id ? 'var(--gold)' : 'var(--card)',
+      color: view === id ? 'var(--on-gold)' : 'var(--ink70)',
+      borderColor: view === id ? 'var(--gold)' : 'var(--line)',
+    }}>{label}</button>
+  )
+
+  return (
+    <div>
+      {/* שם, גובה, עבודה */}
+      <div className="row gap-2" style={{ marginBottom: 10 }}>
+        <input className="field" value={name} onChange={e => setName(e.target.value)}
+          placeholder={`קיר ${total}×${height}`} style={{ fontWeight: 700, flex: 1, minWidth: 0 }} />
+        <div style={{ width: 86 }}>
+          <input className="field" type="number" dir="ltr" style={{ height: 36 }}
+            value={height} onChange={e => setHeight(Number(e.target.value))} />
+        </div>
+      </div>
+      <div className="row gap-2" style={{ marginBottom: 12 }}>
+        <span className="t-meta" style={{ flex: '0 0 auto' }}>עבודה</span>
+        <select className="field" value={jobId || ''} onChange={e => setJobId(e.target.value || null)}
+          style={{ height: 34, flex: 1, minWidth: 0 }}>
+          <option value="">— לא משויך —</option>
+          {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+        </select>
+      </div>
+
+      {/* תצוגת הקיר */}
+      <div className="row" style={{ gap: 2, height: 46, marginBottom: 4 }} dir="ltr">
+        {kulisot.map((k, i) => {
+          const w = Number(k.width) || 0
+          const ok = w > 0 && w <= LIMITS.maxWidth
+          return (
+            <React.Fragment key={k.id}>
+              {i > 0 && (
+                <span title={`קושרת × ${KOSHRET.perJoint}`} style={{
+                  width: 5, background: 'var(--go)', borderRadius: 2, flex: '0 0 auto',
+                }} />
+              )}
+              <span style={{
+                flex: Math.max(w, 20), minWidth: 0, display: 'grid', placeItems: 'center',
+                background: ok ? 'var(--gold)' : 'var(--danger)',
+                color: ok ? 'var(--on-gold)' : '#fff',
+                fontSize: 11, fontWeight: 700, borderRadius: 3,
+              }}>{i + 1}</span>
+            </React.Fragment>
+          )
+        })}
+      </div>
+      <div className="t-meta" style={{ marginBottom: 12 }}>
+        <span className="mono">{total}</span> ס״מ רוחב ·{' '}
+        <span className="mono">{kulisot.length}</span> קוליסות
+        {kulisot.length === 2 && <> · תפר אחד</>}
+        {kulisot.length > 2 && <> · <span className="mono">{kulisot.length - 1}</span> תפרים</>}
+        {wall && <> · <span className="mono">{wall.koshret.count}</span> קושרות של <span className="mono">{wall.koshret.lengthCm}</span></>}
+        <br />לכל קוליסה: <span className="mono">{braces}</span> חיזוקים · גיבן {giben ? 'כן' : 'לא'} — נקבע במסך הקוליסה
+      </div>
+
+      <div className="row gap-2" style={{ marginBottom: 12 }}>
+        {tab('build', 'הרכבה')}
+        {tab('cuts', 'חיתוך וקנייה')}
+        {tab('load', 'העמסה')}
+      </div>
+
+      {/* ---------- הרכבה ---------- */}
+      {view === 'build' && (
+        <>
+          <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
+            {kulisot.map((k, i) => {
+              const w = Number(k.width) || 0
+              const ok = w > 0 && w <= LIMITS.maxWidth
+              return (
+                <div key={k.id} className="row gap-2">
+                  <span className="mono t-meta" style={{ width: 18, flex: '0 0 auto' }}>{i + 1}</span>
+                  <input className="field mono" type="number" dir="ltr"
+                    style={{ height: 34, flex: 1, minWidth: 0, borderColor: ok ? undefined : 'var(--danger)' }}
+                    value={k.width} onChange={e => set(k.id, Number(e.target.value))} />
+                  <span className="row gap-1" dir="ltr" style={{ flex: '0 0 auto' }}>
+                    <button className="btn btn-sm" title="הזז שמאלה" onClick={() => move(k.id, -1)} disabled={i === 0}>‹</button>
+                    <button className="btn btn-sm" title="הזז ימינה" onClick={() => move(k.id, +1)} disabled={i === kulisot.length - 1}>›</button>
+                  </span>
+                  <button className="btn btn-sm" title="שכפל" onClick={() => dup(k.id)}>⧉</button>
+                  <button className="btn btn-sm" title="מחק" style={{ color: 'var(--danger)' }}
+                    onClick={() => del(k.id)} disabled={kulisot.length === 1}>✕</button>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="row gap-2 wrap" style={{ marginBottom: 12 }}>
+            <button className="btn btn-sm" onClick={() => add()}>＋ קוליסה</button>
+            {LIMITS_PREFERRED.map(w => (
+              <button key={w} className="btn btn-sm" onClick={() => add(w)}>＋<span className="mono">{w}</span></button>
+            ))}
+          </div>
+
+          <div className="card" style={{ padding: 10, marginBottom: 12 }}>
+            <div className="t-meta" style={{ marginBottom: 6 }}>לא בטוח בחלוקה? תן מידה ואציע</div>
+            <div className="row gap-2">
+              <input className="field mono" type="number" dir="ltr" style={{ height: 34, flex: 1, minWidth: 0 }}
+                value={target} onChange={e => setTarget(Number(e.target.value))} />
+              <button className="btn btn-sm" onClick={suggest}>הצע חלוקה</button>
+            </div>
+          </div>
+
+          <div className="t-meta" style={{ marginBottom: 6 }}>
+            חפיפת הקושרת על כל קוליסה — שי נקב בטווח {KOSHRET.overlapRange[0]}–{KOSHRET.overlapRange[1]}
+          </div>
+          <div className="row gap-2 wrap" style={{ marginBottom: 6 }}>
+            {[20, 25, 30, 35, 40].map(o => (
+              <button key={o} className="btn btn-sm" onClick={() => setOverlap(o)} style={{
+                background: overlap === o ? 'var(--gold)' : 'var(--card)',
+                color: overlap === o ? 'var(--on-gold)' : 'var(--ink70)',
+                borderColor: overlap === o ? 'var(--gold)' : 'var(--line)',
+              }}><span className="mono">{o}</span></button>
+            ))}
+            <span className="t-meta" style={{ alignSelf: 'center' }}>⇐ קושרת <span className="mono">{overlap * 2}</span> ס״מ</span>
+          </div>
+        </>
+      )}
+
+      {/* ---------- חיתוך וקנייה ---------- */}
+      {view === 'cuts' && (wall ? (
+        <div>
+          <div className="row gap-2 wrap" style={{ marginBottom: 8 }}>
+            {wall.rows.map(r => (
+              <span key={`${r.invId}-${r.len}`} className="chip">
+                <span className="mono">{r.qty}× {r.len}</span>
+              </span>
+            ))}
+          </div>
+          <div className="t-meta" style={{ marginBottom: 10 }}>
+            <span className="mono">{wall.totalCuts}</span> חיתוכים · כולל <span className="mono">{wall.koshret.count}</span> קושרות
+          </div>
+          {plans.map(p => (
+            <div key={p.key} className="card" style={{ padding: 10, marginBottom: 6 }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{p.mat}</div>
+              <div className="t-meta">
+                <b className="mono">{p.barCount}× {p.stock}</b> ס״מ · סה״כ{' '}
+                <span className="mono">{p.barCount * p.stock}</span> · פחת {p.wastePct}%
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : <p className="t-meta">תקן את המידות כדי לראות חיתוך.</p>)}
+
+      {/* ---------- העמסה ---------- */}
+      {view === 'load' && (wall ? (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {wall.loading.map((l, i) => (
+            <div key={i} className="row between gap-2" style={{
+              padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8,
+            }}>
+              <span className="row gap-2">
+                <span className="mono" style={{ fontWeight: 700 }}>{l.qty}×</span>
+                <span>{l.label}</span>
+              </span>
+              <span className="t-meta mono">{l.detail}</span>
+            </div>
+          ))}
+          <div className="t-meta" style={{ marginTop: 4 }}>
+            סך הכול <span className="mono">{wall.loading.reduce((s, l) => s + l.qty, 0)}</span> פריטים לרכב.
+            ברגים, כלים ומשקולות לא נספרים — הכללים שלהם עדיין לא הוגדרו.
+          </div>
+        </div>
+      ) : <p className="t-meta">תקן את המידות כדי לראות העמסה.</p>)}
+
+      {/* ---------- שגיאות ופעולות ---------- */}
+      {bad.length > 0 && (
+        <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 700, marginTop: 10 }}>
+          ✖ {bad.length} קוליסות עם מידה לא חוקית (מעל {LIMITS.maxWidth} או אפס)
+        </div>
+      )}
+      {wall?.warnings.map(w => (
+        <div key={w} style={{ color: 'var(--warn-fg)', fontSize: 12, marginTop: 6 }}>⚠ {w}</div>
+      ))}
+
+      <div className="row gap-2" style={{ marginTop: 12 }}>
+        <button className="btn btn-solid grow" onClick={save} disabled={!wall}>💾 שמור קיר</button>
+      </div>
+
+      {wall && (
+        <>
+          <div className="t-meta" style={{ margin: '12px 0 5px' }}>פתיחת קוליסה על המשטח לעריכה</div>
+          <div className="row gap-2 wrap">
+            {wall.kulisot.map(k => (
+              <button key={k.index} className="btn btn-sm"
+                onClick={() => onOpenKulisa?.(k.width, k.index, Number(height))}>
+                {k.index} · <span className="mono">{k.width}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

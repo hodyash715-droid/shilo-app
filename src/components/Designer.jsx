@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { DIMS, render, hitTest, lenOf, worldPerPixel, dragAxes, snapAlong } from '../designer/geometry.js'
 import { cutList, optimize, DEFAULT_STOCK, PURCHASE, KERF_OPTIONS, DEFAULT_KERF_MM, mmToCm } from '../designer/cuts.js'
-import { materialsFor } from '../designer/materials.js'
+import { materialsFor, pickable } from '../designer/materials.js'
 import { generateKulisa, defaultFrameMaterial, BRACE_MAX, BRACE_DEFAULT, LIMITS_PREFERRED } from '../designer/kulisa.js'
 import { validateDims, invalidParts, tooLongParts } from '../designer/rules.js'
-import { wallProposals, wallCuts } from '../designer/wall.js'
+import WallBuilder from './WallBuilder.jsx'
 import DrawingSheet from './DrawingSheet.jsx'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -29,7 +29,10 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   const [sel, setSel] = useState(null)
   const [view, setView] = useState({ yaw: -0.7, pitch: 0.45, dist: 340, target: { x: 0, y: 90, z: 0 } })
   const [panel, setPanel] = useState(null)   // null | 'add' | 'cuts' | 'load' | 'gen' | 'wall'
-  const [wall, setWall] = useState({ w: 540, h: 240, pick: 0 })
+  const [wallInit, setWallInit] = useState(null)   // קיר שנטען לעריכה
+  // המזהה נשמר ב-ref ולא ב-state: שינוי state היה מרענן את key של
+  // WallBuilder ומאפס את העריכה באמצע.
+  const wallIdRef = useRef(null)
   const [gen, setGen] = useState({ w: 120, h: 240, matId: '', braces: BRACE_DEFAULT, giben: true })
   const [stockOv, setStockOv] = useState({})
   // רוחב להב המסור, במ"מ. נשמר במכשיר — זו תכונה של המסור, לא של הקוליסה.
@@ -211,26 +214,34 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     setView(v => ({ ...v, target: { x: 0, y: gen.h / 2, z: 0 }, dist: Math.max(340, gen.h * 1.6) }))
   }
 
-  // ---- מחלק קיר ----
-  const wallPlan = React.useMemo(() => wallProposals(wall.w, wall.h), [wall.w, wall.h])
-  const wallPick = wallPlan.proposals[wall.pick] || wallPlan.proposals[0] || null
-  const wallBuild = React.useMemo(() => {
-    if (!wallPick || !genMat) return null
-    const built = wallCuts(wallPick.widths, wall.h, { material: genMat, materials, braces: gen.braces, giben: gen.giben })
-    return { ...built, plans: optimize(built.rows, materials, {}, mmToCm(kerfMm)) }
-  }, [wallPick, wall.h, genMat, materials, gen.braces, gen.giben, kerfMm])
-
+  // ---- קיר ----
   // פתיחת קוליסה בודדת מתוך הקיר, על המשטח
-  const openFromWall = (width, index) => {
+  const openFromWall = (width, index, wallH) => {
     if (parts.length && !confirm('פעולה זו מחליפה את כל החלקים שעל המשטח. להמשיך?')) return
-    const g = generateKulisa({ width, height: wall.h, depth: dims.עומק, material: genMat, braces: gen.braces, giben: gen.giben })
+    const g = generateKulisa({ width, height: wallH, depth: dims.עומק, material: genMat, braces: gen.braces, giben: gen.giben })
     if (g.errors.length) return
     snapshot()
-    setDims(d => ({ ...d, רוחב: width, גובה: wall.h }))
+    setDims(d => ({ ...d, רוחב: width, גובה: wallH }))
     setParts(g.parts)
     setSel(null); setGuides([]); setPanel(null)
-    setName(`קיר ${wall.w} · קוליסה ${index} (${width})`)
-    setView(v => ({ ...v, target: { x: 0, y: wall.h / 2, z: 0 }, dist: Math.max(340, wall.h * 1.6) }))
+    setName(`קוליסה ${index} · ${width}×${wallH}`)
+    setView(v => ({ ...v, target: { x: 0, y: wallH / 2, z: 0 }, dist: Math.max(340, wallH * 1.6) }))
+  }
+
+  // שמירת קיר. אותה טבלה כמו קוליסה — preview.kind מבדיל ביניהם,
+  // כך שלא נדרש שינוי סכמה במסד.
+  const saveWall = async (w) => {
+    const saved = await onSave({
+      id: wallIdRef.current,   // עריכה מעדכנת; שמירה חוזרת לא משכפלת
+      name: w.name,
+      preview: {
+        kind: 'wall', גובה: w.height, רוחב: w.totalWidth, עומק: dims.עומק, עובי: dims.עובי,
+        overlapCm: w.overlapCm, braces: gen.braces, giben: gen.giben,
+      },
+      parts: w.kulisot,
+      jobId: w.jobId,
+    })
+    if (saved?.id) wallIdRef.current = saved.id
   }
 
   // ---- אימות: חלק שבור לא יגיע בשקט לרשימת החיתוך ----
@@ -249,6 +260,19 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     if (saved?.id) setEditId(saved.id)
   }
   const loadK = k => {
+    // קיר שמור נפתח במסך ההרכבה, לא כחלקים על המשטח
+    if (k.preview?.kind === 'wall') {
+      wallIdRef.current = k.id
+      setWallInit({
+        id: k.id, name: k.name,
+        height: k.preview.גובה || 240,
+        kulisot: Array.isArray(k.parts) ? k.parts : [],
+        overlapCm: k.preview.overlapCm,
+        jobId: k.job_id || null,
+      })
+      setPanel('wall')
+      return
+    }
     setEditId(k.id); setName(k.name); setJobId(k.job_id || null)
     setDims({ ...{ גובה: 200, רוחב: 100, עומק: 40, עובי: 2 }, ...(k.preview || {}) })
     setParts(Array.isArray(k.parts) ? k.parts : [])
@@ -354,7 +378,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
               <div style={{ fontSize: 34, marginBottom: 6 }}>🪚</div>
               <div style={{ fontWeight: 700 }}>המשטח ריק</div>
               <div className="muted" style={{ fontSize: 13, marginTop: 4, lineHeight: 1.7 }}>
-                <b>🧱 קוליסה</b> בונה מסגרת שלמה ממידה · <b>🏗️ קיר</b> מחלק מידה גדולה לקוליסות.<br />
+                <b>🧱 קוליסה</b> בונה מסגרת לייצור · <b>🏗️ קיר</b> מרכיב קוליסות ומחבר בקושרות.<br />
                 גרור חלק להזזה · גרור רקע לסיבוב · שתי אצבעות לזום.
               </div>
             </div>
@@ -401,109 +425,30 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
         </div>
       )}
 
-      {/* מחלק קיר */}
+      {/* הרכבת קיר */}
       {panel === 'wall' && (
         <div className="card" style={{ marginTop: 12, padding: 14 }}>
           <div className="row between" style={{ marginBottom: 4 }}>
-            <span style={{ fontWeight: 700 }}>קיר — לכמה קוליסות מתחלק</span>
-            <button className="btn btn-ghost btn-sm" onClick={() => setPanel(null)}>✕</button>
+            <span style={{ fontWeight: 700 }}>קיר — הרכבה מקוליסות</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setPanel(null); setWallInit(null); wallIdRef.current = null }}>✕</button>
           </div>
-          <div className="t-meta" style={{ marginBottom: 10 }}>
-            המידה שהמפיקה ביקשה. כל קוליסה עד <span className="mono">{LIMITS_PREFERRED.at(-1)}</span> ס״מ רוחב.
+          <div className="t-meta" style={{ marginBottom: 12 }}>
+            הקוליסה היא יחידת הייצור · הקיר הוא מה שיוצא לעבודה
           </div>
-
-          <div className="row gap-2" style={{ marginBottom: 10 }}>
-            <div style={{ flex: 1 }}>
-              <div className="t-meta" style={{ marginBottom: 4 }}>רוחב הקיר</div>
-              <input className="field" type="number" dir="ltr" style={{ height: 38 }}
-                value={wall.w} onChange={e => setWall(s => ({ ...s, w: Number(e.target.value), pick: 0 }))} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div className="t-meta" style={{ marginBottom: 4 }}>גובה</div>
-              <input className="field" type="number" dir="ltr" style={{ height: 38 }}
-                value={wall.h} onChange={e => setWall(s => ({ ...s, h: Number(e.target.value), pick: 0 }))} />
-            </div>
-          </div>
-
-          {!wallPlan.ok ? (
-            <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 700 }}>
-              {wallPlan.errors.map(e => <div key={e}>✖ {e}</div>)}
-            </div>
-          ) : (
-            <>
-              {wallPlan.warnings.map(w => (
-                <div key={w} style={{ color: 'var(--warn-fg)', fontSize: 12, marginBottom: 8 }}>⚠ {w}</div>
-              ))}
-
-              <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
-                {wallPlan.proposals.map((p, i) => {
-                  const on = i === (wallPlan.proposals[wall.pick] ? wall.pick : 0)
-                  return (
-                    <button key={p.id} onClick={() => setWall(s => ({ ...s, pick: i }))}
-                      style={{
-                        appearance: 'none', font: 'inherit', textAlign: 'start', cursor: 'pointer',
-                        padding: 10, borderRadius: 10, width: '100%',
-                        border: '1px solid', borderColor: on ? 'var(--gold)' : 'var(--line)',
-                        background: on ? 'var(--gold-bg)' : 'var(--card)', color: 'var(--ink)',
-                      }}>
-                      <div className="row between gap-2" style={{ marginBottom: 6 }}>
-                        <span style={{ fontWeight: 700, fontSize: 13 }}>{p.label}</span>
-                        <span className="t-meta mono">{p.widths.length} קוליסות</span>
-                      </div>
-                      <div className="row" style={{ gap: 2, height: 30, marginBottom: 6 }} dir="ltr">
-                        {p.widths.map((w, j) => (
-                          <span key={j} style={{
-                            flex: w, display: 'grid', placeItems: 'center', minWidth: 0,
-                            background: 'var(--gold)', color: 'var(--on-gold)',
-                            fontSize: 10, fontWeight: 700, borderRadius: 3,
-                          }}>{w}</span>
-                        ))}
-                      </div>
-                      <div className="t-meta">{p.notes.join(" · ")}</div>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {wallBuild && (
-                <div className="card" style={{ padding: 10, background: 'var(--gold-bg)' }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
-                    לקיר כולו: <span className="mono">{wallBuild.totalCuts}</span> חיתוכים
-                  </div>
-                  <div className="row gap-2 wrap" style={{ marginBottom: 8 }}>
-                    {wallBuild.rows.map(r => (
-                      <span key={r.len} className="chip">
-                        <span className="mono">{r.qty}× {r.len}</span>
-                      </span>
-                    ))}
-                  </div>
-                  {wallBuild.plans.map(pl => (
-                    <div key={pl.key} className="t-meta" style={{ marginBottom: 4 }}>
-                      {pl.mat}: <b className="mono">{pl.barCount}× {pl.stock}</b> ס״מ
-                      {" · סה״כ "}<span className="mono">{pl.barCount * pl.stock}</span> ס״מ
-                      {" · פחת "}{pl.wastePct}%
-                    </div>
-                  ))}
-                  {wallBuild.warnings.map(w => (
-                    <div key={w} style={{ color: 'var(--warn-fg)', fontSize: 12, marginTop: 6 }}>⚠ {w}</div>
-                  ))}
-
-                  <div className="t-meta" style={{ margin: "10px 0 5px" }}>פתיחת קוליסה על המשטח</div>
-                  <div className="row gap-2 wrap">
-                    {wallBuild.kulisot.map(k => (
-                      <button key={k.index} className="btn btn-sm"
-                        onClick={() => openFromWall(k.width, k.index)}>
-                        {k.index} · <span className="mono">{k.width}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+          <WallBuilder
+            key={wallInit?.id || 'new'}
+            materials={materials}
+            material={genMat}
+            kerfCm={mmToCm(kerfMm)}
+            braces={gen.braces}
+            giben={gen.giben}
+            jobs={jobs}
+            initial={wallInit}
+            onOpenKulisa={openFromWall}
+            onSaveWall={saveWall}
+          />
         </div>
       )}
-
       {/* מחולל קוליסה */}
       {panel === 'gen' && (
         <div className="card" style={{ marginTop: 12, padding: 14 }}>
@@ -539,7 +484,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
           <div className="t-meta" style={{ marginBottom: 4 }}>חומר המסגרת</div>
           <select className="field" style={{ height: 38, marginBottom: 10 }}
             value={genMat?.id || ''} onChange={e => setGen(g => ({ ...g, matId: e.target.value }))}>
-            {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            {pickable(materials).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
 
           <div className="t-meta" style={{ marginBottom: 6 }}>חיזוקים פנימיים</div>
@@ -602,7 +547,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
             <span style={{ fontWeight: 700 }}>בחר חומר גלם</span>
             <button className="btn btn-ghost btn-sm" onClick={() => setPanel(null)}>✕</button>
           </div>
-          {materials.map((m, i) => (
+          {pickable(materials).map((m, i) => (
             <button key={m.id} onClick={() => addPart(m.id)} className="row between gap-2" style={{
               appearance: 'none', border: 0, width: '100%', textAlign: 'start', cursor: 'pointer',
               background: 'transparent', color: 'var(--ink)', font: 'inherit', padding: 11,
@@ -636,7 +581,11 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
                   color: 'var(--ink)', font: 'inherit', textAlign: 'start', flex: 1, minWidth: 0,
                 }}>
                   <div style={{ fontWeight: 600 }} className="truncate">{k.name}</div>
-                  <div className="t-meta">{(k.parts || []).length} חלקים · <span className="mono">{k.preview?.גובה}×{k.preview?.רוחב}</span></div>
+                  <div className="t-meta">
+                    {k.preview?.kind === 'wall'
+                      ? <>🏗️ {(k.parts || []).length} קוליסות · <span className="mono">{k.preview?.רוחב}×{k.preview?.גובה}</span></>
+                      : <>{(k.parts || []).length} חלקים · <span className="mono">{k.preview?.גובה}×{k.preview?.רוחב}</span></>}
+                  </div>
                 </button>
                 <button className="btn btn-ghost btn-sm" style={{ color: '#E5735B' }} onClick={() => onDelete(k.id)}>✕</button>
               </div>

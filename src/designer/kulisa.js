@@ -37,7 +37,8 @@ export function sectionOf(material) {
 // בלי זה המחולל היה לוקח את הפריט הראשון במלאי — למשל קורה 5×5,
 // ומוציא פנימי 110 במקום 116.
 export function defaultFrameMaterial(materials = []) {
-  return materials.find(m => sectionOf(m)[0] === VERTICAL_FACE_CM) || materials[0] || null
+  const usable = materials.filter(m => !m.legacy)
+  return usable.find(m => sectionOf(m)[0] === VERTICAL_FACE_CM) || usable[0] || materials[0] || null
 }
 
 /**

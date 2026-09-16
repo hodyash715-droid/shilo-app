@@ -294,7 +294,7 @@ export default function App() {
     try {
       const saved = await saveKoolisa(k)
       setKoolisot(xs => xs.some(x => x.id === saved.id) ? xs.map(x => x.id === saved.id ? saved : x) : [saved, ...xs])
-      showToast('הקוליסה נשמרה')
+      showToast(k.preview?.kind === 'wall' ? 'הקיר נשמר' : 'הקוליסה נשמרה')
       return saved
     } catch (e) { showToast('השמירה נכשלה — הרץ את koolisot.sql'); return null }
   }

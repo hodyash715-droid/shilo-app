@@ -28,6 +28,22 @@ export const GIBEN = {
 }
 export const gibenMemberCount = () => GIBEN.perKulisa * GIBEN.membersEach
 
+// קושרת: הקורה שמחברת שתי קוליסות סמוכות מאחור.
+// אושר על ידי שי (16.9.2026): שתיים לכל תפר — אחת למעלה ואחת למטה,
+// צמודות לקצה או כמעט. כל קושרת עוברת לפחות 20-30 ס"מ על כל קוליסה,
+// ולכן אורכה הוא פי שניים מהחפיפה. אותה לטה 4×2.
+// שי נקב בטווח ולא במספר אחד — overlapCm הוא אמצע הטווח וניתן לשינוי.
+export const KOSHRET = {
+  perJoint: 2,
+  overlapCm: 25,
+  overlapRange: [20, 30],
+  placement: 'rear',
+  status: 'verified',
+  overlapStatus: 'preference',
+}
+export const koshretLength = (overlapCm = KOSHRET.overlapCm) =>
+  Math.round(Number(overlapCm) * 2 * 10) / 10
+
 // מגבלות קוליסה. אושר על ידי שי (13.9.2026): מקסימום 3 מטר גובה על 1.5 מטר רוחב.
 // בעיצוב חופשי (שטיח, שלט) חריגה היא אזהרה בלבד; במחולל הקוליסה היא חוסמת.
 export const LIMITS = {

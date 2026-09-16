@@ -2,10 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { cutList, optimize, orderLengths, maxOrderLength, isBoard, PURCHASE, KERF_OPTIONS, DEFAULT_KERF_MM, mmToCm } from '../src/designer/cuts.js'
 import { generateKulisa } from '../src/designer/kulisa.js'
-import { materialsFor } from '../src/designer/materials.js'
+import { materialsFor, pickable } from '../src/designer/materials.js'
 
 const MATS = materialsFor([])
-const LATA = MATS.find(m => m.name === 'לטה 2×3')
+const LATA = MATS.find(m => m.name === 'לטה 4×2')
 const DIKET = MATS.find(m => /דיקט/.test(m.name))
 const DIMS = { גובה: 240, רוחב: 120, עומק: 40, עובי: 2 }
 
@@ -109,4 +109,25 @@ test('רוחב חתך לא תקין נופל לברירת המחדל', () => {
   for (const bad of [null, undefined, NaN, 'אבג', -1]) {
     assert.equal(optimize(cuts, MATS, {}, bad)[0].kerf, mmToCm(DEFAULT_KERF_MM), `kerf=${bad}`)
   }
+})
+
+// ---------- QA: חומר שהוסר מהבחירה עדיין נפתר ----------
+// קוליסות שנשמרו לפני שהחלפנו את הלטה מצביעות על std:lata-2x3.
+// בלי הרשומה הישנה, שם החומר ברשימת החיתוך הופך לשם החלק.
+test('קוליסה ישנה עם חומר שהוסר עדיין מקבלת את שם החומר הנכון', () => {
+  const old = [
+    { id: '1', invId: 'std:lata-2x3', name: 'אנכית ימין', axis: 'y', len: '{גובה}', pos: { x: 0, y: 0, z: 0 } },
+    { id: '2', invId: 'std:lata-2x3', name: 'חיזוק 1', axis: 'x', len: '{רוחב}-4', pos: { x: 0, y: 0, z: 0 } },
+  ]
+  const rows = cutList(old, DIMS, MATS)
+  assert.ok(rows.every(r => r.mat === 'לטה 2×3'), JSON.stringify(rows.map(r => r.mat)))
+})
+
+test('חומרים ישנים אינם מוצעים לבחירה', () => {
+  const names = pickable(MATS).map(m => m.name)
+  assert.ok(names.includes('לטה 4×2'))
+  assert.equal(names.includes('לטה 2×3'), false)
+  assert.equal(names.includes('לטה 3×3'), false)
+  // אבל הם עדיין קיימים לחיפוש
+  assert.ok(MATS.some(m => m.id === 'std:lata-2x3'))
 })

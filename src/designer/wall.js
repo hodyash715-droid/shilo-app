@@ -7,7 +7,7 @@
 // ההעדפות משפיעות על הדירוג בלבד. שי בוחר.
 // ============================================================
 
-import { LIMITS, validateDims } from './rules.js'
+import { LIMITS, validateDims, KOSHRET, koshretLength } from './rules.js'
 import { generateKulisa, LIMITS_PREFERRED, BRACE_DEFAULT } from './kulisa.js'
 import { cutList } from './cuts.js'
 
@@ -171,5 +171,85 @@ export function wallCuts(widths, height, { material, materials = [], braces = BR
     totalParts: kulisot.reduce((s, k) => s + k.parts.length, 0),
     totalCuts: rows.reduce((s, r) => s + r.qty, 0),
     warnings: [...warnings],
+  }
+}
+
+/**
+ * הרכבת קיר: הקוליסות, החיבורים ביניהן, ומה יוצא לדרך.
+ *
+ * קושרת אינה חיזוק פנימי — היא מחברת שתי קוליסות סמוכות מאחור,
+ * ולכן היא שייכת לקיר ולא לקוליסה. שתיים לכל תפר: אחת למעלה ואחת למטה.
+ */
+export function assembleWall(widths, height, {
+  material, materials = [], braces = BRACE_DEFAULT, giben = true,
+  overlapCm = KOSHRET.overlapCm,
+} = {}) {
+  const base = wallCuts(widths, height, { material, materials, braces, giben })
+  const warnings = [...base.warnings]
+  const n = base.kulisot.length
+  const joints = Math.max(0, n - 1)
+  const overlap = Number(overlapCm) > 0 ? Number(overlapCm) : KOSHRET.overlapCm
+  const lengthCm = koshretLength(overlap)
+
+  // כל תפר מקבל שתי קושרות — עליונה ותחתונה.
+  const connections = []
+  for (let i = 0; i < joints; i++) {
+    const left = base.kulisot[i], right = base.kulisot[i + 1]
+    const narrow = Math.min(left.width, right.width)
+    if (overlap > narrow) {
+      warnings.push(`תפר ${i + 1}: חפיפה ${overlap} ס״מ רחבה מהקוליסה הצרה (${narrow} ס״מ)`)
+    }
+    connections.push({
+      index: i + 1,
+      betweenKulisot: [left.index, right.index],
+      label: `קושרת בין ${left.index} ל-${right.index}`,
+      placement: KOSHRET.placement,
+      overlapCm: overlap,
+      pieces: Array.from({ length: KOSHRET.perJoint }, (_, j) => ({
+        at: j === 0 ? 'עליונה' : 'תחתונה',
+        lengthCm,
+      })),
+    })
+  }
+
+  const koshretCount = joints * KOSHRET.perJoint
+
+  // הקושרות נכנסות לרשימת החיתוך — הן עץ שצריך לקנות ולנסר.
+  const rows = base.rows.map(r => ({ ...r }))
+  if (koshretCount > 0 && material) {
+    const same = rows.find(r => r.invId === material.id && r.len === lengthCm)
+    if (same) same.qty += koshretCount
+    else rows.push({ invId: material.id, mat: material.name, len: lengthCm, qty: koshretCount })
+    rows.sort((a, b) => a.mat.localeCompare(b.mat, "he") || b.len - a.len)
+  }
+
+  // מה עולה על הרכב.
+  const loading = [
+    ...base.kulisot.map(k => ({
+      kind: 'kulisa',
+      label: `קוליסה ${k.index}`,
+      detail: `${k.width}×${height} ס״מ`,
+      qty: 1,
+    })),
+    ...(koshretCount > 0 ? [{
+      kind: 'koshret',
+      label: 'קושרות',
+      detail: `${lengthCm} ס״מ · ${KOSHRET.perJoint} לכל תפר`,
+      qty: koshretCount,
+    }] : []),
+  ]
+
+  return {
+    kulisot: base.kulisot,
+    connections,
+    koshret: { count: koshretCount, lengthCm, overlapCm: overlap, perJoint: KOSHRET.perJoint },
+    rows,
+    loading,
+    // מסכמים את הקוליסות שנבנו בפועל ולא את הקלט הגולמי:
+    // קוליסה פסולה מדולגת, ואסור שהקיר יתיימר להיות רחב ממה שהורכב.
+    totalWidth: base.kulisot.reduce((a, k) => a + k.width, 0),
+    height,
+    totalCuts: rows.reduce((s2, r) => s2 + r.qty, 0),
+    warnings,
   }
 }

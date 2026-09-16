@@ -21,12 +21,19 @@ export function evalFormula(expr, dims) {
   } catch { return 0 }
 }
 
-// ---- חתך הפרופיל בס"מ, נגזר משם החומר ("לטה 2×3") ----
+// ---- חתך הפרופיל בס"מ, נגזר משם החומר ("לטה 4×2") ----
+// מוחזר תמיד כ-[צר, רחב] בלי קשר לסדר בשם.
+// הלטה מונחת במסגרת עם הצלע הצרה לחזית — זה מה שנותן רוחב−4
+// בלטה 4×2, כפי ששי אישר (120 ⇒ 116). סדר השם אינו אמין:
+// "4×2" ו-"2×4" הם אותו עץ בדיוק.
 export function profileOf(part, materials) {
   const m = materials.find(x => x.id === part.invId)
   const nm = m?.name || part.name || ''
   const mm = nm.match(/(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)/)
-  if (mm) return [parseFloat(mm[1]), parseFloat(mm[2])]
+  if (mm) {
+    const a = parseFloat(mm[1]), b = parseFloat(mm[2])
+    return [Math.min(a, b), Math.max(a, b)]
+  }
   return [4, 4]
 }
 
