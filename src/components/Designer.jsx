@@ -406,6 +406,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     setSel(null); setSelK(null); setGuides([]); setPanel(null)
     setWallView({
       base, layout, joints: {}, groups: r.groups, ballast: ballast || null, linear: r.linear,
+      dropped: r.dropped || [],
       seams: r.seams, bolts: r.bolts, koshretDropped: r.koshretDropped,
       kulisot: r.kulisot, koshret: r.koshret, width: r.dims.רוחב,
     })
@@ -446,7 +447,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     partsRef.current = r.parts
     setParts(r.parts)
     setWallView(w => ({
-      ...w, layout, joints: nextJoints, groups: r.groups, linear: r.linear,
+      ...w, layout, joints: nextJoints, groups: r.groups, linear: r.linear, dropped: r.dropped || [],
       seams: r.seams, bolts: r.bolts, koshret: r.koshret, koshretDropped: r.koshretDropped,
     }))
     return true
@@ -595,6 +596,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
       setWallView(r.parts.length ? {
         base: { widths: w.widths, height: w.height, overlapCm: w.overlapCm, prod: w.prod },
         layout: w.layout || {}, joints: w.joints || {}, groups: r.groups, ballast: w.ballast || null, linear: r.linear,
+        dropped: r.dropped || [],
         seams: r.seams, bolts: r.bolts, koshretDropped: r.koshretDropped,
         kulisot: r.kulisot, koshret: r.koshret, width: r.dims.רוחב,
       } : null)
@@ -784,6 +786,29 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
       {/* הקוליסות שמרכיבות את הקיר — בחירה והזזה כיחידה שלמה */}
       {wallView && (
         <div className="card" style={{ marginTop: 10, padding: 12 }}>
+          {wallView.dropped?.length > 0 && (
+            <div style={{
+              border: '1px solid var(--danger)', borderRadius: 8, padding: '9px 11px',
+              marginBottom: 10, fontSize: 12, lineHeight: 1.7,
+            }}>
+              <div style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: 3 }}>
+                ✖ <span className="mono">{wallView.dropped.length}</span>{' '}
+                {wallView.dropped.length === 1 ? 'קוליסה לא נבנתה' : 'קוליסות לא נבנו'}
+              </div>
+              {wallView.dropped.slice(0, 4).map(d => (
+                <div key={d.row} className="t-meta">
+                  שורה <span className="mono">{d.row}</span>{' '}
+                  (<span className="mono">{d.width}</span>×<span className="mono">{d.height}</span>) — {d.error}
+                </div>
+              ))}
+              {wallView.dropped.length > 4 && (
+                <div className="t-meta">ועוד <span className="mono">{wallView.dropped.length - 4}</span></div>
+              )}
+              <div className="t-meta" style={{ marginTop: 4 }}>
+                מה שעל המשטח חסר את החלקים האלה, וגם רשימת החיתוך.
+              </div>
+            </div>
+          )}
           <div className="t-meta" style={{ marginBottom: 7 }}>
             הקוליסות בקיר — לחץ על אחת (כאן או על המשטח), גרור אותה על המשטח, או פתח אותה ככנף
           </div>

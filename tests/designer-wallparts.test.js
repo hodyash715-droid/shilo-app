@@ -113,7 +113,21 @@ test('קוליסה פסולה נופלת מהקיר ולא מזייפת את ה�
   assert.equal(r.kulisot, 2)
   assert.equal(r.koshret, KOSHRET.perJoint)
   assert.equal(r.dims.רוחב, 240)
-  assert.equal(r.parts.filter(p => p.name.startsWith('ק3 ·')).length, 0)
+  // השורה השנייה נחסמה, ומדווחת
+  assert.equal(r.dropped.length, 1)
+  assert.equal(r.dropped[0].row, 2)
+  assert.ok(r.dropped[0].error.includes('רוחב'))
+})
+
+test('שורה שנחסמה לא מזיזה את המזהים של מי שאחריה', () => {
+  // זה היה באג שקט: ק3 הפכה ל-ק2, וקיבלה את הסידור של ק2.
+  const r = build([120, 999, 80])
+  assert.deepEqual(r.order, [1, 3], 'המזהים לא נשמרו לפי השורה')
+  assert.equal(r.parts.filter(p => p.k === 2).length, 0, 'שורה חסומה ייצרה חלקים')
+  assert.ok(r.parts.some(p => p.k === 3), 'השורה השלישית איבדה את מזהה השורה שלה')
+  // והרוחב של ק3 הוא 80, לא של מישהו אחר
+  const v = r.parts.filter(p => p.k === 3 && p.axis === 'y').map(p => p.pos.x)
+  assert.equal(Math.round(Math.max(...v) - Math.min(...v) + 2), 80)
 })
 
 test('קלט ריק לא מפיל ולא מחזיר חלקים', () => {

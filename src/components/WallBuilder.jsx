@@ -232,6 +232,15 @@ export default function WallBuilder({
           return (
             <div style={{ marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
               <div className="t-meta" style={{ marginBottom: 7 }}>{t.hint}</div>
+              {(() => {
+                // אזהרה לפני הלחיצה עדיפה על שגיאה אחריה
+                const w = t.build({ ...TEMPLATE_DEFAULTS[tplId], ...tplVals })?.warning
+                return w ? (
+                  <div style={{ color: 'var(--warn-fg)', fontSize: 12, marginBottom: 8, lineHeight: 1.6 }}>
+                    ⚠ {w}
+                  </div>
+                ) : null
+              })()}
               <div style={{ display: 'grid', gap: 7 }}>
                 {t.fields.map(f => (
                   <div key={f} className="row gap-2">

@@ -286,11 +286,18 @@ export function wallParts(widths, height, {
   const built = []
   let cursor = 0
 
-  widths.forEach((w) => {
+  // המזהה הוא מספר השורה, ולא סדר הבנייה: שורה שנחסמה הייתה מזיזה
+  // את כל מי שאחריה מספר אחד אחורה, וכל הסידור היה נדבק לקוליסה
+  // הלא נכונה — בשקט, בלי שאף אחד יידע.
+  const dropped = []
+  widths.forEach((w, i) => {
     const { width, height: kh } = kulisaSpec(w, height)
     const g = generateKulisa({ width, height: kh, depth, material, braces, giben })
-    if (g.errors.length) return
-    built.push({ index: built.length + 1, width, height: kh, start: cursor, parts: g.parts })
+    if (g.errors.length) {
+      dropped.push({ row: i + 1, width, height: kh, error: g.errors[0] })
+      return
+    }
+    built.push({ index: i + 1, width, height: kh, start: cursor, parts: g.parts })
     cursor += width
   })
 
@@ -345,7 +352,13 @@ export function wallParts(widths, height, {
   for (let i = 0; i < built.length - 1; i++) {
     seamXs.push(r1(-totalWidth / 2 + built[i].start + built[i].width))
   }
-  return { parts, dims, seamXs, kulisot: built.length, koshret: joints * KOSHRET.perJoint }
+  return {
+    parts, dims, seamXs, dropped,
+    // הסדר שבו הקוליסות באמת עומדות, לפי המזהים שלהן
+    order: built.map(b => b.index),
+    kulisot: built.length,
+    koshret: joints * KOSHRET.perJoint,
+  }
 }
 
 // ============================================================
@@ -415,12 +428,15 @@ export const normalizeT = (t = {}) => ({
 // לטה שרצה לגובה ('y') רצה עכשיו לעומק ('z') ולהפך. אין צורך במנוע
 // סיבוב כללי, והאורכים כמובן לא משתנים.
 // אחרי ההנחה הקוליסה יושבת על הרצפה ונמתחת אחורה; dy ו-dz מציבים אותה.
-export function layGroupFlat(parts, ids) {
+// refZ: נקודת הייחוס להשכבה. הקושרת של תפר בין שתי שוכבות חייבת
+// להישכב לפי אותה נקודה כמו הקוליסות עצמן — אחרת היא נוחתת בגובה
+// אחר ומרחפת מעל המבנה.
+export function layGroupFlat(parts, ids, refZ) {
   const set = ids instanceof Set ? ids : new Set(ids)
   if (!set.size) return parts
   const mine = parts.filter(p => set.has(p.id))
   if (!mine.length) return parts
-  const minZ = Math.min(...mine.map(p => p.pos.z))
+  const minZ = Number.isFinite(refZ) ? refZ : Math.min(...mine.map(p => p.pos.z))
   const swap = { y: 'z', z: 'y' }
   return parts.map(p => {
     if (!set.has(p.id)) return p
@@ -467,17 +483,23 @@ export function transformGroup(parts, ids, { dx = 0, dz = 0, dy = 0, deg = 0 } =
 // התפר נבחן לפי מה שקרה בפועל ולא לפי הפרמטרים. שתי קוליסות שסובבו
 // באותה זווית סביב צירים שונים נפרדות זו מזו, והשוואת מספרים הייתה
 // מכריזה עליהן "ישר" ושולחת קושרת של 50 לגשר על מטר וחצי.
-export function seamsOf(count, layout = {}, joints = {}, geom = null) {
+// order = מזהי הקוליסות לפי סדר עמידתן. תפר j הוא בין order[j-1]
+// ל-order[j]. מספר בלבד נתמך לתאימות לאחור.
+export function seamsOf(order, layout = {}, joints = {}, geom = null) {
+  const ks = Array.isArray(order)
+    ? order
+    : Array.from({ length: Number(order) || 0 }, (_, i) => i + 1)
   const at = k => geom?.frames?.[k]?.t || normalizeT(layout[k])
 
   // האם התפר נשאר שלם: אותה זווית, ושתי הקוליסות ממפות את נקודת
   // התפר לאותו מקום בדיוק.
   const intact = (i) => {
-    const a = at(i), b = at(i + 1)
+    const [ka, kb] = [ks[i - 1], ks[i]]
+    const a = at(ka), b = at(kb)
     if (rr(b.deg - a.deg)) return false
     // אחת שוכבת והשנייה עומדת — אין ביניהן מישור משותף.
     if (a.flat !== b.flat) return false
-    const fa = geom?.frames?.[i], fb = geom?.frames?.[i + 1]
+    const fa = geom?.frames?.[ka], fb = geom?.frames?.[kb]
     if (!fa || !fb) return a.dx === b.dx && a.dz === b.dz && a.dy === b.dy
     const p = { x: geom.seamXs?.[i - 1] ?? 0, y: 0, z: 0 }
     const A = applyToPoint(p, fa.t, fa.pivot)
@@ -490,8 +512,9 @@ export function seamsOf(count, layout = {}, joints = {}, geom = null) {
     return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : JOINT.bolts
   }
   const out = []
-  for (let i = 1; i < count; i++) {
-    const a = at(i), b = at(i + 1)
+  for (let i = 1; i < ks.length; i++) {
+    const [ka, kb] = [ks[i - 1], ks[i]]
+    const a = at(ka), b = at(kb)
     const angle = rr(b.deg - a.deg)
     const corner = !intact(i)
     const apart = corner && !angle
@@ -500,7 +523,7 @@ export function seamsOf(count, layout = {}, joints = {}, geom = null) {
     const koshret = corner ? false : (wanted === undefined ? JOINT.koshretByDefault : !!wanted)
     out.push({
       seam: i,
-      between: [i, i + 1],
+      between: [ka, kb],
       corner, angle, apart, koshret,
       bolts: clampBolts(joints[i]?.bolts ?? (corner ? CORNER.bolts : JOINT.bolts)),
       canToggleKoshret: !corner,
@@ -531,7 +554,8 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
       let t = normalizeT(layout[k])
       // המצב שממנו מודדים: אחרי השכבה, לפני הזזה.
       const ids = group.map(p => p.id)
-      const rest = t.flat ? layGroupFlat(group, ids) : group
+      const refZ = t.flat ? Math.min(...group.map(p => p.pos.z)) : null
+      const rest = t.flat ? layGroupFlat(group, ids, refZ) : group
       const pivot = groupPivot(rest)
       // at = "שים את מרכז הקוליסה כאן". התבניות מדברות במיקומים
       // ולא בהפרשים, ולכן הן לא צריכות לדעת איך נבנה הרצף הליניארי.
@@ -549,10 +573,10 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
           dz: rr(Number(at.z ?? c.z) - c.z),
         }
       }
-      frames[k] = { t, pivot, ids }
+      frames[k] = { t, pivot, ids, refZ }
     }
   }
-  const seams = seamsOf(base.kulisot, layout, joints, { frames, seamXs: base.seamXs })
+  const seams = seamsOf(base.order, layout, joints, { frames, seamXs: base.seamXs })
   const corners = seams.filter(s => s.corner)
   const noKoshret = new Set(seams.filter(s => !s.koshret).map(s => s.seam))
   const kept = noKoshret.size
@@ -575,7 +599,7 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
     const { t, pivot, ids } = fr
     if (!t.dx && !t.dz && !t.dy && !t.deg && !t.flat) continue
     // קודם משכיבים, אחר כך מזיזים — אחרת ההזזה הייתה מתפרשת על הצירים הישנים.
-    if (t.flat) parts = layGroupFlat(parts, ids)
+    if (t.flat) parts = layGroupFlat(parts, ids, fr.refZ)
     parts = transformGroup(parts, ids, t, pivot)
   }
 
@@ -586,8 +610,14 @@ export function wallLayout(widths, height, opts = {}, layout = {}, joints = {}) 
     if (sm.corner || !sm.koshret) continue
     const fr = frames[sm.between[0]]
     if (!fr || (!fr.t.dx && !fr.t.dz && !fr.t.dy && !fr.t.deg && !fr.t.flat)) continue
+    const koIds = parts.filter(p => p.k === 0 && p.seam === sm.seam).map(p => p.id)
+    if (!koIds.length) continue
+    // הקושרת עוברת בדיוק את אותה תנועה כמו הקוליסות שהיא מחברת,
+    // כולל השכבה — אחרת היא נשארת עומדת ומרחפת מעל מבנה שוכב.
+    if (fr.t.flat) parts = layGroupFlat(parts, koIds, fr.refZ)
+    const koSet = new Set(koIds)
     parts = parts.map(p => (
-      p.k === 0 && p.seam === sm.seam
+      koSet.has(p.id)
         ? { ...p, yaw: (Number(p.yaw) || 0) + fr.t.deg * Math.PI / 180, pos: applyToPoint(p.pos, fr.t, fr.pivot) }
         : p
     ))

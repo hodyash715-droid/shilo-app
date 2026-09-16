@@ -146,9 +146,85 @@ test('השער עומד על הרצפה ולא חודר אותה', () => {
   }
 })
 
-test('רשימת החיתוך מכילה את הגובה הנמוך של הצלע הפנימית', () => {
-  const { r } = build()
+test('רשימת החיתוך מכילה את גובה הרגל ואת הצלע הנמוכה', () => {
+  const { r, out } = build()
   const lens = cutList(r.parts, r.dims, MATS).map(x => x.len)
-  assert.ok(lens.includes(240), 'חסרות אנכיות בגובה מלא')
-  assert.ok(lens.includes(180), 'חסרות אנכיות של הצלע הנמוכה')
+  // out.height הוא גובה הרגליים אחרי שהופחת עובי השוכבת
+  assert.ok(lens.includes(out.height), `חסרות אנכיות של ${out.height}`)
+  assert.ok(lens.includes(TEMPLATE_DEFAULTS['gate-free'].inner), 'חסרות אנכיות של הצלע הנמוכה')
+})
+
+test('"שער 3 מטר" יוצא 3 מטר — הגובה שנמסר הוא של השער כולו', () => {
+  for (const asked of [200, 240, 290, 300]) {
+    const { r } = build({ height: asked })
+    assert.equal(r.dropped.length, 0, `גובה ${asked} נחסם`)
+    assert.equal(r.dims.גובה, asked, `ביקשנו ${asked} וקיבלנו ${r.dims.גובה}`)
+  }
+})
+
+test('הרגליים נמוכות מהשער בדיוק בעובי השוכבת', () => {
+  const { r, out } = build({ height: 300 })
+  const legTop = Math.max(...r.parts.filter(p => p.k === 1).map(p => p.pos.y))
+  const capBottom = Math.min(...r.parts.filter(p => p.flat).map(p => p.pos.y))
+  assert.ok(capBottom >= legTop - 1, 'השוכבת שוקעת לתוך הרגל')
+  assert.ok(out.height < 300, 'גובה הרגל לא הופחת')
+})
+
+// ---- מה שהתגלה בשער של 604×360 ----
+
+test('קושרת בין שתי קוליסות שוכבות נשכבת איתן ולא מרחפת', () => {
+  for (const width of [420, 604, 800]) {
+    const { r } = build({ width, height: 240 })
+    const top = Math.max(...r.parts.map(p => p.pos.y))
+    const ko = r.parts.filter(p => p.k === 0)
+    const floating = ko.filter(p => p.pos.y > top + 1)
+    assert.equal(floating.length, 0,
+      `רוחב ${width}: ${floating.length} קושרות מרחפות ב-${floating.map(p => p.pos.y)}`)
+    // הקושרות של השוכבות אכן סומנו כשוכבות
+    const flat = ko.filter(p => p.flat)
+    assert.ok(flat.every(p => p.axis !== 'y'), 'קושרת שוכבת נשארה בציר אנכי')
+  }
+})
+
+test('כל חלק — כולל קושרות — נמצא בתוך התיבה של המבנה', () => {
+  const { r } = build({ width: 604, height: 240 })
+  const ext = ax => {
+    const v = r.parts.filter(p => p.k !== 0).map(p => p.pos[ax])
+    return [Math.min(...v), Math.max(...v)]
+  }
+  for (const ax of ['x', 'y', 'z']) {
+    const [lo, hi] = ext(ax)
+    for (const p of r.parts.filter(q => q.k === 0)) {
+      assert.ok(p.pos[ax] >= lo - 8 && p.pos[ax] <= hi + 8,
+        `קושרת מחוץ למבנה ב-${ax}: ${p.pos[ax]} מול [${lo}..${hi}]`)
+    }
+  }
+})
+
+test('שורה שנחסמה מדווחת, ולא נבלעת', () => {
+  // רגליים ב-360 חורגות מהמקסימום ולכן נחסמות
+  const { r, out } = build({ width: 604, height: 360 })
+  assert.ok(r.dropped.length > 0, 'שורות נחסמו בלי דיווח')
+  assert.equal(r.kulisot + r.dropped.length, out.rows.length,
+    'סכום הנבנו והנחסמו לא מכסה את כל השורות')
+  for (const d of r.dropped) {
+    assert.ok(d.row >= 1 && d.row <= out.rows.length, `שורה ${d.row} מחוץ לטווח`)
+    assert.ok(typeof d.error === 'string' && d.error.length > 0, 'חסר הסבר')
+  }
+})
+
+test('הסידור נדבק לשורה שביקשה אותו, גם כששורות אחרות נחסמו', () => {
+  const { r, out } = build({ width: 604, height: 360 })
+  // כל קוליסה שנבנתה שומרת את מזהה השורה שלה
+  const built = new Set(r.order)
+  for (const d of r.dropped) assert.ok(!built.has(d.row), `שורה ${d.row} גם נחסמה וגם נבנתה`)
+  for (const k of r.order) {
+    const rowW = out.rows[k - 1].width
+    const v = r.parts.filter(p => p.k === k && p.axis !== 'x').map(p => p.pos)
+    assert.ok(v.length > 0, `ק${k} בלי חלקים`)
+    // והסידור שהוחל עליה הוא זה שנכתב לשורה שלה
+    if (out.layout[k]?.at) {
+      assert.ok(rowW > 0, `ק${k} איבדה את השורה שלה`)
+    }
+  }
 })

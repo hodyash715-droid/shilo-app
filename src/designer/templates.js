@@ -90,7 +90,15 @@ export const TEMPLATES = [
     // מעל הפתח: חזית, גב, ועוד אחת שוכבת שסוגרת מלמעלה כדי שלא
     // ייראה עץ חשוף מלמעלה. בלעדיה רואים עץ — לפעמים מסתפקים בשתיים.
     build: ({ width, height, leg, depth, inner, header, bags }) => {
-      const H = Math.max(20, Math.round(height || 240))
+      // height הוא גובה השער כולו, כולל השוכבת שסוגרת מלמעלה.
+      // "שער 3 מטר" צריך לצאת 3 מטר, ולא 3.04.
+      // 6 = הגיבן של השוכבת (שתי לטות, 2 ס״מ) ועוד הפרופיל (4). נמדד.
+      const capT = 6
+      const TOTAL = Math.max(20, Math.round(height || 240))
+      const H = Math.max(10, TOTAL - capT)    // גובה הרגליים
+      // קוליסה אחת לא עוברת את המקסימום. רגל גבוהה יותר תיחסם, ולכן
+      // אנחנו אומרים את זה כאן — ולא נותנים לשער לצאת חסר חלקים בשקט.
+      const tooTall = H > LIMITS.maxHeight
       const L = clampW(leg || 60)
       const D = clampW(depth || 60)
       const IN = Math.max(10, Math.min(H, Math.round(inner || Math.round(H * 0.75))))
@@ -119,15 +127,23 @@ export const TEMPLATES = [
       spans.forEach(sp => put({ width: sp.w, height: HD }, { at: { x: sp.c, y: H - HD / 2, z: 0 } }))
       spans.forEach(sp => put({ width: sp.w, height: HD }, { at: { x: sp.c, y: H - HD / 2, z: -D } }))
       // השוכבת שסוגרת מלמעלה. בלעדיה רואים עץ חשוף מלמעלה.
+      // היא יושבת על ראש הרגליים, וראשה הוא גובה השער המלא.
       spans.forEach(sp => put({ width: sp.w, height: D },
-        { flat: true, at: { x: sp.c, y: H + 1, z: -D / 2 } }))
+        { flat: true, at: { x: sp.c, y: H + capT / 2, z: -D / 2 } }))
 
       // 0 הוא בקשה מפורשת, לא "לא נמסר" — הוא נחסם לטווח ולא נבלע.
       const asked = Math.round(Number(bags))
       const perLeg = Number.isFinite(asked)
         ? Math.max(BALLAST.perLegRange[0], Math.min(BALLAST.perLegRange[1], asked))
         : BALLAST.perLeg
-      return { height: H, rows, layout, ballast: { perLeg, legs: 2, name: BALLAST.name } }
+      return {
+        height: H, rows, layout,
+        ballast: { perLeg, legs: 2, name: BALLAST.name },
+        warning: tooTall
+          ? `רגל בגובה ${H} חורגת מהמקסימום לקוליסה אחת (${LIMITS.maxHeight} ס״מ) — `
+            + `שער כזה צריך רגל בנויה משתי קוליסות זו על זו, וזה עדיין לא נתמך`
+          : null,
+      }
     },
   },
 
