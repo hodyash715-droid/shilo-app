@@ -115,10 +115,13 @@ export function pointInPoly(x, y, pts) {
   return inside
 }
 
-function drawGrid(ctx, view, W, H, dpr) {
+function drawGrid(ctx, view, W, H, dpr, halfSpan = 120) {
   ctx.lineWidth = 1 * dpr
   ctx.strokeStyle = 'rgba(238,196,33,.13)'
-  const g = 20, n = 6
+  // הרשת נמתחת לפי המידה שעל המשטח: קיר של 7 מטר לא ירחף מעל
+  // ריבוע של 120 ס״מ. תקרה של 40 משבצות שלא ייתקע הציור.
+  const g = 20
+  const n = Math.min(40, Math.max(6, Math.ceil(halfSpan / g)))
   for (let i = -n; i <= n; i++) {
     const a = project({ x: i * g, y: 0, z: -n * g }, view, W, H)
     const b = project({ x: i * g, y: 0, z: n * g }, view, W, H)
@@ -139,7 +142,7 @@ export function render(canvas, { parts, dims, materials, view, selId, guides }) 
   const W = canvas.width, H = canvas.height
   const ctx = canvas.getContext('2d')
   ctx.clearRect(0, 0, W, H)
-  drawGrid(ctx, view, W, H, dpr)
+  drawGrid(ctx, view, W, H, dpr, Math.max(Number(dims?.רוחב) || 0, Number(dims?.עומק) || 0) / 2 + 40)
 
   const faces = []
   parts.forEach(part => {

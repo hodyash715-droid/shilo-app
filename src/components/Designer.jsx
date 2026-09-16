@@ -5,6 +5,7 @@ import { materialsFor, pickable } from '../designer/materials.js'
 import { generateKulisa, defaultFrameMaterial, BRACE_MAX, BRACE_DEFAULT, LIMITS_PREFERRED } from '../designer/kulisa.js'
 import { validateDims, invalidParts, tooLongParts } from '../designer/rules.js'
 import WallBuilder from './WallBuilder.jsx'
+import { wallParts } from '../designer/wall.js'
 import DrawingSheet from './DrawingSheet.jsx'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -30,6 +31,9 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   const [view, setView] = useState({ yaw: -0.7, pitch: 0.45, dist: 340, target: { x: 0, y: 90, z: 0 } })
   const [panel, setPanel] = useState(null)   // null | 'add' | 'cuts' | 'load' | 'gen' | 'wall'
   const [wallInit, setWallInit] = useState(null)   // קיר שנטען לעריכה
+  // סיכום הקיר שעל המשטח, או null אם מה שמוצג הוא קוליסה בודדת.
+  // בלעדיו "רוחב 690 מעל המקסימום" היה מוצג כאזהרה על קיר תקין לגמרי.
+  const [wallView, setWallView] = useState(null)
   // המזהה נשמר ב-ref ולא ב-state: שינוי state היה מרענן את key של
   // WallBuilder ומאפס את העריכה באמצע.
   const wallIdRef = useRef(null)
@@ -120,7 +124,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     if (d.mode === 'pinch') {
       if (e.touches?.length !== 2) return
       const k = twoDist(e) / (d.d0 || 1)
-      setView(v => ({ ...v, dist: Math.max(60, Math.min(900, d.dist0 / k)) }))
+      setView(v => ({ ...v, dist: Math.max(60, Math.min(2000, d.dist0 / k)) }))
       return
     }
 
@@ -162,7 +166,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   }
 
   const up = () => { dragRef.current = null; setGuides([]) }
-  const wheel = e => { e.preventDefault(); setView(v => ({ ...v, dist: Math.max(60, Math.min(900, v.dist + e.deltaY * 0.5)) })) }
+  const wheel = e => { e.preventDefault(); setView(v => ({ ...v, dist: Math.max(60, Math.min(2000, v.dist + e.deltaY * 0.5)) })) }
 
   // ---- חלקים ----
   const addPart = (invId) => {
@@ -203,12 +207,19 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     () => generateKulisa({ width: gen.w, height: gen.h, depth: dims.עומק, material: genMat, braces: gen.braces, giben: gen.giben }),
     [gen.w, gen.h, gen.braces, gen.giben, genMat, dims.עומק]
   )
+  // מרחק המצלמה. עד היום נגזר מהגובה בלבד — קיר של 7 מטר נחתך בצדדים.
+  const frameFor = (d) => ({
+    target: { x: 0, y: (Number(d.גובה) || 0) / 2, z: 0 },
+    dist: Math.max(340, (Number(d.רוחב) || 0) * 1.2, (Number(d.גובה) || 0) * 1.6),
+  })
+
   const applyGen = () => {
     if (genResult.errors.length) return
     if (parts.length && !confirm('פעולה זו מחליפה את כל החלקים שעל המשטח. להמשיך?')) return
     snapshot()
     setDims(d => ({ ...d, רוחב: gen.w, גובה: gen.h }))
     setParts(genResult.parts)
+    setWallView(null)
     setSel(null); setGuides([]); setPanel(null)
     if (!name.trim()) setName(`קוליסה ${gen.h}×${gen.w}`)
     setView(v => ({ ...v, target: { x: 0, y: gen.h / 2, z: 0 }, dist: Math.max(340, gen.h * 1.6) }))
@@ -223,9 +234,29 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     snapshot()
     setDims(d => ({ ...d, רוחב: width, גובה: wallH }))
     setParts(g.parts)
+    setWallView(null)
     setSel(null); setGuides([]); setPanel(null)
     setName(`קוליסה ${index} · ${width}×${wallH}`)
     setView(v => ({ ...v, target: { x: 0, y: wallH / 2, z: 0 }, dist: Math.max(340, wallH * 1.6) }))
+  }
+
+  // כל הקיר על המשטח: הקוליסות זו לצד זו, והקושרות מאחור על התפרים.
+  // האורכים נכתבים כמספרים ולא כנוסחאות — {רוחב} כאן הוא רוחב הקיר
+  // כולו, ואילו כל אופקי נמדד לפי הקוליסה שלו.
+  const showWallOnCanvas = (widths, wallH, overlapCm) => {
+    if (parts.length && !confirm('פעולה זו מחליפה את כל החלקים שעל המשטח. להמשיך?')) return
+    const r = wallParts(widths, wallH, {
+      material: genMat, braces: gen.braces, giben: gen.giben, overlapCm, depth: dims.עומק,
+    })
+    if (!r.parts.length) return
+    snapshot()
+    setDims(r.dims)
+    setParts(r.parts)
+    setSel(null); setGuides([]); setPanel(null)
+    setWallView({ kulisot: r.kulisot, koshret: r.koshret, width: r.dims.רוחב })
+    setName(n => n.trim() || `קיר ${r.dims.רוחב}×${r.dims.גובה}`)
+    setView(v => ({ ...v, ...frameFor(r.dims) }))
+    setTimeout(() => cvRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0)
   }
 
   // שמירת קיר. אותה טבלה כמו קוליסה — preview.kind מבדיל ביניהם,
@@ -245,12 +276,17 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   }
 
   // ---- אימות: חלק שבור לא יגיע בשקט לרשימת החיתוך ----
-  const dimCheck = validateDims(dims)
+  const dimCheckRaw = validateDims(dims)
+  // על קיר, "רוחב מעל 150" הוא סכום הקוליסות ולא חריגה. כל שאר
+  // הבדיקות נשארות בתוקף.
+  const dimCheck = wallView
+    ? { ...dimCheckRaw, warnings: dimCheckRaw.warnings.filter(w => w.field !== 'רוחב') }
+    : dimCheckRaw
   const badParts = invalidParts(parts, dims)
   const longParts = tooLongParts(parts, dims, materials, stockOv)
   const badIds = new Set(badParts.map(b => b.id))
 
-  const resetView = () => setView({ yaw: -0.7, pitch: 0.45, dist: 340, target: { x: 0, y: dims.גובה / 2, z: 0 } })
+  const resetView = () => setView({ yaw: -0.7, pitch: 0.45, ...frameFor(dims) })
 
   // ---- שמירה / טעינה ----
   const save = async () => {
@@ -276,10 +312,10 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     setEditId(k.id); setName(k.name); setJobId(k.job_id || null)
     setDims({ ...{ גובה: 200, רוחב: 100, עומק: 40, עובי: 2 }, ...(k.preview || {}) })
     setParts(Array.isArray(k.parts) ? k.parts : [])
-    setSel(null); setPanel(null)
+    setSel(null); setPanel(null); setWallView(null)
   }
   const newK = (forJob = null) => {
-    setEditId(null); setName(''); setParts([]); setSel(null); setPanel(null)
+    setEditId(null); setName(''); setParts([]); setSel(null); setPanel(null); setWallView(null)
     setJobId(forJob)
     histRef.current = { past: [], future: [] }; setHistLen(0)
   }
@@ -384,6 +420,17 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
             </div>
           </div>
         )}
+        {wallView && (
+          <div style={{
+            position: 'absolute', bottom: 10, insetInlineStart: 10, pointerEvents: 'none',
+            background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 8,
+            padding: '4px 9px', fontSize: 12, fontWeight: 700,
+          }}>
+            🏗️ קיר · <span className="mono">{wallView.kulisot}</span> קוליסות ·{' '}
+            <span className="mono">{wallView.koshret}</span> קושרות ·{' '}
+            <span className="mono">{wallView.width}</span> ס״מ
+          </div>
+        )}
         <div className="row gap-2" style={{ position: 'absolute', top: 10, insetInlineStart: 10 }}>
           <button className="btn btn-sm" onClick={resetView}>🔄 מבט</button>
           <button className="btn btn-sm" onClick={undo} disabled={!histLen}
@@ -411,7 +458,11 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
 
       {/* רצועת החלקים — בחירה מהירה בלי לצוד על המשטח */}
       {parts.length > 0 && (
-        <div className="row gap-2 wrap" style={{ marginTop: 10 }}>
+        // קיר של 5 קוליסות הוא 53 חלקים. בלי תקרה הרצועה דוחפת את
+        // רשימת החיתוך ואת הכפתורים אל מחוץ למסך בטלפון.
+        <div className="row gap-2 wrap" style={{
+          marginTop: 10, maxHeight: 132, overflowY: 'auto',
+        }}>
           {parts.map((p, i) => (
             <button key={p.id} className="chip" onClick={() => setSel(p.id)} style={{
               cursor: 'pointer', border: '1px solid',
@@ -446,6 +497,7 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
             onOpenKulisa={openFromWall}
             onSaveWall={saveWall}
             onNewWall={() => { wallIdRef.current = null; setWallInit(null) }}
+            onShowWall={showWallOnCanvas}
           />
       </div>
 

@@ -16,7 +16,7 @@ const num = (v) => (String(v).trim() === '' ? NaN : Number(v))
 
 export default function WallBuilder({
   materials, material, kerfCm, braces, giben,
-  jobs = [], onOpenKulisa, onSaveWall, onNewWall, initial,
+  jobs = [], onOpenKulisa, onSaveWall, onNewWall, onShowWall, initial,
 }) {
   const [name, setName] = useState(initial?.name || '')
   const [height, setHeight] = useState(initial?.height || 240)
@@ -282,13 +282,19 @@ export default function WallBuilder({
       ))}
 
       <div className="row gap-2" style={{ marginTop: 12 }}>
-        <button className="btn btn-solid grow" onClick={save} disabled={!wall}>💾 שמור קיר</button>
+        <button className="btn btn-solid grow" disabled={!wall}
+          onClick={() => onShowWall?.(widths, Number(height), overlap)}>
+          🏗️ הצג את הקיר על המשטח
+        </button>
+      </div>
+      <div className="row gap-2" style={{ marginTop: 8 }}>
+        <button className="btn grow" onClick={save} disabled={!wall}>💾 שמור קיר</button>
         <button className="btn" onClick={reset}>קיר חדש</button>
       </div>
 
       {wall && (
         <>
-          <div className="t-meta" style={{ margin: '12px 0 5px' }}>פתיחת קוליסה על המשטח לעריכה</div>
+          <div className="t-meta" style={{ margin: '12px 0 5px' }}>או קוליסה בודדת בלבד, לעריכה</div>
           <div className="row gap-2 wrap">
             {wall.kulisot.map(k => (
               <button key={k.index} className="btn btn-sm"

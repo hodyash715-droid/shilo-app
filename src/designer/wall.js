@@ -8,8 +8,9 @@
 // ============================================================
 
 import { LIMITS, validateDims, KOSHRET, koshretLength } from './rules.js'
-import { generateKulisa, LIMITS_PREFERRED, BRACE_DEFAULT } from './kulisa.js'
+import { generateKulisa, LIMITS_PREFERRED, BRACE_DEFAULT, sectionOf } from './kulisa.js'
 import { cutList } from './cuts.js'
+import { rawLenOf } from './geometry.js'
 
 // כל הצירופים של מידות סטנדרטיות שמסתכמים בדיוק לרוחב הקיר.
 // סדר לא-עולה מונע כפילויות של אותה קבוצה בסדר אחר.
@@ -256,4 +257,67 @@ export function assembleWall(widths, height, {
     totalCuts: rows.reduce((s2, r) => s2 + r.qty, 0),
     warnings,
   }
+}
+
+/**
+ * הקיר כולו כחלקים על המשטח: כל הקוליסות זו לצד זו, והקושרות מאחור.
+ *
+ * האורכים כאן מספרים ולא נוסחאות — נוסחה כמו {רוחב} הייתה מתייחסת
+ * לרוחב הקיר כולו במקום לרוחב הקוליסה שאליה החלק שייך.
+ */
+export function wallParts(widths, height, {
+  material, braces = BRACE_DEFAULT, giben = true, overlapCm = KOSHRET.overlapCm, depth = 40,
+} = {}) {
+  const r1 = n => Math.round(n * 10) / 10
+  const uid = () => Math.random().toString(36).slice(2, 10)
+  const built = []
+  let cursor = 0
+
+  widths.forEach((width, i) => {
+    const g = generateKulisa({ width, height, depth, material, braces, giben })
+    if (g.errors.length) return
+    built.push({ index: built.length + 1, width, start: cursor, parts: g.parts })
+    cursor += Number(width)
+  })
+
+  const totalWidth = cursor
+  const dims = { גובה: Number(height), רוחב: totalWidth, עומק: depth, עובי: 2 }
+  const parts = []
+
+  built.forEach(k => {
+    // כל קוליסה ממורכזת סביב 0 בפני עצמה; מזיזים אותה למקומה בקיר.
+    const kd = { גובה: Number(height), רוחב: k.width, עומק: depth, עובי: 2 }
+    const offset = r1(-totalWidth / 2 + k.start + k.width / 2)
+    k.parts.forEach(p => parts.push({
+      ...p,
+      id: uid(),
+      name: `ק${k.index} · ${p.name}`,
+      len: String(r1(rawLenOf(p, kd))),
+      pos: { ...p.pos, x: r1(p.pos.x + offset) },
+    }))
+  })
+
+  // קושרות: שתיים לכל תפר, מאחורי המסגרת, חוצות את התפר.
+  const overlap = Number(overlapCm) > 0 ? Number(overlapCm) : KOSHRET.overlapCm
+  const kLen = koshretLength(overlap)
+  const [pw, ph] = material ? sectionOf(material) : [2, 4]
+  const zBack = r1(-(pw + ph))
+  for (let i = 0; i < built.length - 1; i++) {
+    const seam = r1(-totalWidth / 2 + built[i].start + built[i].width)
+    ;[['עליונה', r1(Number(height) - ph / 2)], ['תחתונה', r1(ph / 2)]].forEach(([at, y]) => {
+      parts.push({
+        id: uid(),
+        invId: material?.id,
+        name: `קושרת ${i + 1} ${at}`,
+        axis: 'x',
+        len: String(kLen),
+        pos: { x: seam, y, z: zBack },
+      })
+    })
+  }
+
+  // Math.max: קיר בלי אף קוליסה תקינה נתן (0-1)*2 = מינוס שתי קושרות,
+  // והמספר הזה הוצג על המשטח.
+  const joints = Math.max(0, built.length - 1)
+  return { parts, dims, kulisot: built.length, koshret: joints * KOSHRET.perJoint }
 }
