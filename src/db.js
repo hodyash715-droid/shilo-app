@@ -343,6 +343,17 @@ export async function setAvailability(employee_id, date, status, start_time = nu
   return data
 }
 
+// כמה ימים בבת אחת — בקשה אחת במקום 28
+export async function setAvailabilityMany(rows) {
+  if (!rows.length) return []
+  const { data, error } = await supabase
+    .from('availability')
+    .upsert(rows, { onConflict: 'employee_id,date' })
+    .select()
+  if (error) throw error
+  return data
+}
+
 export async function clearAvailability(employee_id, date) {
   const { error } = await supabase.from('availability').delete()
     .eq('employee_id', employee_id).eq('date', date)

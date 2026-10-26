@@ -7,7 +7,7 @@ import NotifOptIn from './NotifOptIn.jsx'
 
 const DAYS_AHEAD = 28
 
-export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, onSignOut, notifs = [], onNotifRead, onNotifReadAll }) {
+export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, onSetAvailMany, onSignOut, notifs = [], onNotifRead, onNotifReadAll }) {
   const [tab, setTab] = useState('avail')
   const [picker, setPicker] = useState(null)
 
@@ -22,6 +22,7 @@ export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, 
     .sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.start_time || '').localeCompare(b.start_time || ''))
 
   const submittedCount = days.filter(d => availMap[isoLocal(d)]).length
+  const unmarked = days.map(isoLocal).filter(iso => !availMap[iso])
 
   const segBtn = (id, label, badge) => (
     <button onClick={() => setTab(id)} className="btn" style={{
@@ -73,6 +74,19 @@ export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, 
                 סמן את הימים שאתה יכול לעבוד בהם. שי רואה את זה ומשבץ לפי מה שסימנת.
               </div>
               <div className="t-meta" style={{ marginTop: 8 }}>סימנת {submittedCount} מתוך {DAYS_AHEAD} ימים</div>
+              {unmarked.length > 0 && onSetAvailMany && (
+                <>
+                  <button className="btn btn-solid" style={{ width: '100%', height: 46, marginTop: 12 }}
+                    onClick={() => onSetAvailMany(me.id, unmarked, 'full')}>
+                    ✓ פנוי בכל הימים
+                  </button>
+                  <div className="t-meta" style={{ marginTop: 6, textAlign: 'center' }}>
+                    {submittedCount
+                      ? `מסמן את ${unmarked.length} הימים שעוד לא סימנת. מה שכבר סימנת נשאר.`
+                      : 'אחר כך אפשר לשנות כל יום בנפרד.'}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="card" style={{ overflow: 'hidden' }}>

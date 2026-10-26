@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { supabase, isConfigured } from './supabase.js'
 import {
   fetchJobs, updateJob, fetchEmployees, fetchShifts, fetchInventory,
-  fetchAvailability, setAvailability as saveAvailability, clearAvailability,
+  fetchAvailability, setAvailability as saveAvailability, setAvailabilityMany, clearAvailability,
   claimEmployeeCode, fetchMyJobTitles, fetchClients,
   fetchKoolisot, saveKoolisa, deleteKoolisa,
   fetchNotifications, markNotifRead, markAllNotifsRead,
@@ -347,6 +347,16 @@ export default function App() {
     catch (e) { showToast('עדכון נכשל'); load() }
   }
 
+  // "פנוי בכל הימים": ימים שכבר סומנו לא נדרסים — רק הריקים מתמלאים
+  const onSetAvailMany = async (employee_id, dates, status) => {
+    const rows = dates.map(date => ({ employee_id, date, status, start_time: null, end_time: null }))
+    if (!rows.length) return
+    setAvailabilityState(av => [...av, ...rows])
+    showToast(`סומנו ${rows.length} ימים`)
+    try { await setAvailabilityMany(rows) }
+    catch (e) { showToast('עדכון נכשל'); load() }
+  }
+
   // דף הלקוח — ללא התחברות, לפני כל בדיקת הרשאות
   const clientToken = (route.match(/^#\/c\/(.+)$/) || [])[1]
   if (clientToken) return <><ClientPortal token={decodeURIComponent(clientToken)} /><VersionBadge /></>
@@ -366,7 +376,7 @@ export default function App() {
     return (
       <>
         <WorkerApp me={me} jobs={jobs} shifts={shifts} availability={availability}
-          onSetAvail={onSetAvail} onSignOut={() => supabase.auth.signOut()}
+          onSetAvail={onSetAvail} onSetAvailMany={onSetAvailMany} onSignOut={() => supabase.auth.signOut()}
           notifs={notifs} onNotifRead={onNotifRead} onNotifReadAll={onNotifReadAll} />
         <VersionBadge />
         {toast && <Toast text={toast} />}
