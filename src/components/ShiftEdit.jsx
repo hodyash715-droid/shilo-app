@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
-import { SHIFT_KINDS } from '../data.js'
+import { SHIFT_KINDS, availById, availLabel } from '../data.js'
 import { createShift, updateShift, deleteShift } from '../db.js'
 import { EmpAvatar } from './ui.jsx'
 
-export default function ShiftEdit({ shift, jobId, jobDate, employees, onClose, onSaved, onDeleted }) {
+export default function ShiftEdit({ shift, jobId, jobDate, employees, availability = [], shifts = [], onClose, onSaved, onDeleted }) {
   const editing = Boolean(shift && shift.id)
   const [f, setF] = useState(() => shift ? { ...shift } : {
     kind: 'setup', date: jobDate || '', start_time: '08:00', end_time: '12:00', need: 2, assigned: [],
@@ -12,6 +12,12 @@ export default function ShiftEdit({ shift, jobId, jobDate, employees, onClose, o
   const [err, setErr] = useState('')
   const set = (k, v) => setF(s => ({ ...s, [k]: v }))
   const label = t => <div className="t-meta" style={{ marginBottom: 6 }}>{t}</div>
+
+  // מה כל עובד סימן ליום המשמרת, ואיפה הוא כבר משובץ באותו יום
+  const availOf = (empId) => availability.find(a => a.employee_id === empId && a.date === f.date)
+  const busyAt = (empId) => shifts
+    .filter(s => s.id !== shift?.id && s.date === f.date && (s.assigned || []).includes(empId))
+    .map(s => s.start_time)
 
   const toggle = (id) => set('assigned', f.assigned.includes(id) ? f.assigned.filter(x => x !== id) : [...f.assigned, id])
 
@@ -77,7 +83,18 @@ export default function ShiftEdit({ shift, jobId, jobDate, employees, onClose, o
                         <EmpAvatar name={e.name} size={32} />
                         <div className="grow" style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 600, fontSize: 14 }} className="truncate">{e.name}</div>
-                          <div className="t-meta truncate">{e.role || ''}</div>
+                          {(() => {
+                            const av = f.date ? availOf(e.id) : null
+                            const other = f.date ? busyAt(e.id) : []
+                            return (
+                              <div className="t-meta truncate">
+                                {!f.date ? (e.role || '')
+                                  : av ? <span style={{ color: availById[av.status]?.color, fontWeight: 600 }}>{availLabel(av)}</span>
+                                  : 'לא סימן זמינות'}
+                                {other.length > 0 && <span style={{ color: '#E5735B' }}> · משובץ גם ב-{other.join(', ')}</span>}
+                              </div>
+                            )
+                          })()}
                         </div>
                         <span style={{
                           width: 22, height: 22, borderRadius: 6, flex: 'none',

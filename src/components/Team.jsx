@@ -21,9 +21,9 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
   const availMap = {}
   for (const a of availability) availMap[`${a.employee_id}|${a.date}`] = a
 
-  // משמרות שחסר בהן צוות
+  // משמרות שחסר בהן צוות — רק מהיום והלאה; משמרת שעברה כבר לא תאויש
   const understaffed = shifts
-    .filter(s => (s.assigned?.length || 0) < (s.need || 1))
+    .filter(s => (s.assigned?.length || 0) < (s.need || 1) && (!s.date || s.date >= todayIso))
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
 
   const move = (n) => { const d = new Date(weekStart); d.setDate(d.getDate() + n * 7); setWeekStart(d) }
@@ -171,7 +171,7 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
       )}
 
       <div className="t-meta" style={{ textAlign: 'center', marginTop: 12 }}>
-        הקש על תא כדי לקבוע זמינות. בהמשך העובדים יגישו זמינות בעצמם.
+        העובדים מגישים זמינות מהאפליקציה שלהם. הקש על תא כדי לסמן בשמם.
       </div>
 
       {picker && (
@@ -184,6 +184,7 @@ export default function Team({ employees, shifts, jobs, availability, onSetAvail
         const job = jobs.find(j => j.id === shiftEdit?.job_id)
         return (
           <ShiftEdit shift={shiftEdit} jobId={shiftEdit?.job_id} jobDate={job?.eventDate} employees={employees}
+            availability={availability} shifts={shifts}
             onClose={() => setShiftEdit(undefined)}
             onSaved={(s) => { onShiftSaved(s); setShiftEdit(undefined) }}
             onDeleted={(id) => { onShiftDeleted(id); setShiftEdit(undefined) }} />

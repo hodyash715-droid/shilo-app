@@ -268,6 +268,7 @@ export default function Calendar({ jobs, shifts = [], employees = [], availabili
         const job = jobs.find(j => j.id === shiftEdit?.job_id)
         return (
           <ShiftEdit shift={shiftEdit} jobId={shiftEdit?.job_id} jobDate={job?.eventDate} employees={employees}
+            availability={availability} shifts={shifts}
             onClose={() => setShiftEdit(undefined)}
             onSaved={s => { onShiftSaved(s); setShiftEdit(undefined) }}
             onDeleted={id => { onShiftDeleted(id); setShiftEdit(undefined) }} />

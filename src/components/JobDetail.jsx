@@ -6,7 +6,7 @@ import Thread from './Thread.jsx'
 import FileList from './FileList.jsx'
 import { fetchJobMessages, postJobMessage, fetchJobFiles, uploadJobFile, deleteJobFile, signedFileUrl } from '../db.js'
 
-export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, onShiftSaved, onShiftDeleted, onQuote, koolisot = [], onDesign, clients = [], onShowPrices }) {
+export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, availability = [], onShiftSaved, onShiftDeleted, onQuote, koolisot = [], onDesign, clients = [], onShowPrices }) {
   const [shiftEdit, setShiftEdit] = useState(undefined) // undefined=closed, null=new, shift=edit
   const [msgs, setMsgs] = useState([])
   const [files, setFiles] = useState([])
@@ -413,6 +413,7 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
 
       {shiftEdit !== undefined && (
         <ShiftEdit shift={shiftEdit} jobId={job.id} jobDate={job.eventDate} employees={employees}
+          availability={availability} shifts={shifts}
           onClose={() => setShiftEdit(undefined)}
           onSaved={(s) => { onShiftSaved(s); setShiftEdit(undefined) }}
           onDeleted={(id) => { onShiftDeleted(id); setShiftEdit(undefined) }} />

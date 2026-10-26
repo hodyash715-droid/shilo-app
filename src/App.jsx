@@ -135,9 +135,10 @@ export default function App() {
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  // טעינת עבודות כשמחוברים
-  const load = async () => {
-    setLoading(true); setLoadErr('')
+  // טעינת עבודות כשמחוברים. quiet = רענון ברקע, בלי שלד טעינה ובלי לאפס את המסך
+  const load = async (quiet = false) => {
+    if (!quiet) setLoading(true)
+    setLoadErr('')
     try {
       const [j, mj, e, sh, inv, av] = await Promise.all([
         fetchJobs().catch(() => []),          // עובד חסום מהעבודות — יקבל []
@@ -155,10 +156,30 @@ export default function App() {
       setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av)
       setClients(cl); setKoolisot(kl)
     }
-    catch (e) { setLoadErr(e.message || String(e)) }
-    finally { setLoading(false); setDataReady(true) }
+    catch (e) { if (!quiet) setLoadErr(e.message || String(e)) }
+    finally { if (!quiet) setLoading(false); setDataReady(true) }
   }
   useEffect(() => { if (session) load() }, [session])
+
+  // האפליקציה נשארת פתוחה בטלפון ימים. בלי זה שי לא רואה זמינות שעובד
+  // הגיש, והעובד לא רואה משמרת ששובץ אליה, עד שסוגרים ופותחים מחדש.
+  useEffect(() => {
+    if (!session || !dataReady) return
+    let last = Date.now()
+    const refresh = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 10000) return
+      last = Date.now()
+      load(true)
+    }
+    const t = setInterval(refresh, 60000)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [session, dataReady])
 
   // קישור עצמי: עובד שנכנס עם הקוד שלו ועדיין לא מקושר — נקשר אוטומטית
   useEffect(() => {
@@ -370,7 +391,7 @@ export default function App() {
           <div className="card" style={{ padding: 14, borderColor: '#5a3320' }}>
             <div style={{ color: '#E5735B', fontWeight: 600 }}>טעינת הנתונים נכשלה</div>
             <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{loadErr}</div>
-            <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={load}>נסה שוב</button>
+            <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => load()}>נסה שוב</button>
           </div>
         </div>
       )}
@@ -409,7 +430,7 @@ export default function App() {
           onClose={() => setOpenId(null)}
           onStatus={setStatus}
           onEdit={() => setEditTarget(openJob)}
-          shifts={shifts} employees={employees}
+          shifts={shifts} employees={employees} availability={availability}
           onShiftSaved={onShiftSaved} onShiftDeleted={onShiftDeleted}
           onQuote={onQuote}
           koolisot={koolisot}
