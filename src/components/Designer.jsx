@@ -446,8 +446,10 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
     if (!r.parts.length) return false
     partsRef.current = r.parts
     setParts(r.parts)
+    // הזזת כנף משנה את מה שהקיר תופס — המידות והתג מתעדכנים איתה
+    setDims(d => ({ ...d, רוחב: r.dims.רוחב, גובה: r.dims.גובה }))
     setWallView(w => ({
-      ...w, layout, joints: nextJoints, groups: r.groups, linear: r.linear, dropped: r.dropped || [],
+      ...w, width: r.dims.רוחב, layout, joints: nextJoints, groups: r.groups, linear: r.linear, dropped: r.dropped || [],
       seams: r.seams, bolts: r.bolts, koshret: r.koshret, koshretDropped: r.koshretDropped,
     }))
     return true

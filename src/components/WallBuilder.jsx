@@ -9,7 +9,7 @@ import { wallProposals, assembleWall } from '../designer/wall.js'
 import { LIMITS, KOSHRET } from '../designer/rules.js'
 import { LIMITS_PREFERRED, sectionOf } from '../designer/kulisa.js'
 import { optimize } from '../designer/cuts.js'
-import { TEMPLATES, TEMPLATE_DEFAULTS, FIELD_LABELS, templateById } from '../designer/templates.js'
+import { TEMPLATES, TEMPLATE_DEFAULTS, FIELD_LABELS, templateById, buildTemplate } from '../designer/templates.js'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const mk = (width, height) => ({ id: uid(), width: String(width ?? ''), height: String(height ?? '') })
@@ -48,14 +48,17 @@ export default function WallBuilder({
   const applyTemplate = () => {
     const t = templateById(tplId)
     if (!t) return
-    const out = t.build({ ...TEMPLATE_DEFAULTS[tplId], ...tplVals })
+    const vals = { ...TEMPLATE_DEFAULTS[tplId], ...tplVals }
+    const out = buildTemplate(tplId, vals, { material, braces, giben })
     if (!out.rows.length) return
     setKulisot(out.rows.map(r => mk(r.width, r.height)))
     if (out.rows.some(r => r.height)) setPerHeight(true)
     setHeight(out.height)
     setSeedLayout(Object.keys(out.layout).length ? out.layout : null)
     setSeedBallast(out.ballast || null)
-    if (!name.trim()) setName(`${t.name} ${out.height}×${out.rows.reduce((a, r) => a + r.width, 0)}`)
+    // השם לפי מה שביקשו, ולא סכום הקוליסות — בכנפיים ובשער הסכום
+    // כולל צלעות שלא נראות מקדימה
+    if (!name.trim()) setName(`${t.name} ${vals.height}×${vals.front ?? vals.width}`)
     setTplId(null)
   }
   const [view, setView] = useState('build')   // build | cuts | load

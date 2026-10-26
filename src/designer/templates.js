@@ -11,7 +11,7 @@
 // ============================================================
 
 import { LIMITS, BALLAST } from './rules.js'
-import { arrangeSymmetric } from './wall.js'
+import { arrangeSymmetric, wallLayout } from './wall.js'
 
 const r1 = n => Math.round(n * 10) / 10
 const clampW = n => Math.max(1, Math.min(LIMITS.maxWidth, Math.round(n)))
@@ -43,10 +43,15 @@ export const TEMPLATES = [
     id: 'wings',
     name: 'קיר עם כנפיים',
     hint: 'קיר מרכזי, וקוליסה מקופלת ב-90° בכל צד',
-    fields: ['width', 'height', 'wing'],
-    build: ({ width, height, wing }) => {
+    // "קיר 300 עם כנפיים" = חזית של 300, והכנפיים בנוסף. עד 26.10.2026
+    // הרוחב כלל את הכנפיים, ושי ביקש 300 וקיבל חזית של 186.
+    // fold = כמה הכנפיים המקופלות בולטות מעבר לחזית (עובי הפרופיל
+    // שלהן). תלוי בחומר, ולכן נמדד בבנייה ומקוזז — 300 יוצא 300.
+    fields: ['front', 'height', 'wing'],
+    fold: true,
+    build: ({ front, height, wing, fold = 0 }) => {
       const w = clampW(wing || 60)
-      const middle = split(Math.max(1, Math.round(width) - 2 * w))
+      const middle = split(Math.max(1, Math.round(front - fold)))
       const rows = [{ width: w }, ...middle.map(x => ({ width: x })), { width: w }]
       // שתי הכנפיים מתקפלות לאותו צד — צורת ח, כמו בתצלום מהאתר.
       // הסימנים הפוכים בכוונה: כל כנף מסתובבת סביב הקצה הפנימי שלה,
@@ -151,28 +156,49 @@ export const TEMPLATES = [
     id: 'booth',
     name: 'דוכן',
     hint: 'חזית נמוכה ושתי צלעות ב-90°',
-    fields: ['width', 'height', 'side'],
-    build: ({ width, height, side }) => {
+    // כמו בכנפיים: הרוחב הוא החזית, והצלעות בנוסף.
+    fields: ['front', 'height', 'side'],
+    fold: true,
+    build: ({ front, height, side, fold = 0 }) => {
       const s = clampW(side || 40)
-      const front = split(Math.max(1, Math.round(width) - 2 * s))
-      const rows = [{ width: s }, ...front.map(x => ({ width: x })), { width: s }]
+      const face = split(Math.max(1, Math.round(front - fold)))
+      const rows = [{ width: s }, ...face.map(x => ({ width: x })), { width: s }]
       const layout = { 1: { deg: 90 }, [rows.length]: { deg: -90 } }
       return { height, rows, layout }
     },
   },
 ]
 
+// בנייה מתבנית, כמו שהמסך עושה. כנפיים מקופלות בולטות מעבר לחזית
+// בעובי הפרופיל שלהן — תלוי בחומר ובגיבן. בונים, מודדים מה יצא,
+// ומקזזים, כדי שחזית של 300 תצא 300.
+// opts = { material, braces, giben }. בלי חומר אין מה למדוד.
+export function buildTemplate(id, vals, opts = {}) {
+  const t = templateById(id)
+  if (!t) return null
+  const v = { ...TEMPLATE_DEFAULTS[id], ...vals }
+  let out = t.build(v)
+  if (t.fold && opts.material && out.rows.length) {
+    const rows = out.rows.map(r => (r.height ? r : r.width))
+    const got = wallLayout(rows, out.height, opts, out.layout).dims.רוחב
+    const fold = Math.round(got - v.front)
+    if (fold > 0) out = t.build({ ...v, fold })
+  }
+  return out
+}
+
 // ברירות מחדל לכל שדה, לפי התבנית
 export const TEMPLATE_DEFAULTS = {
   straight: { width: 360, height: 240 },
-  wings:    { width: 400, height: 240, wing: 60 },
+  wings:    { front: 300, height: 240, wing: 60 },
   gate:     { width: 300, height: 240, leg: 60, header: 60 },
-  booth:    { width: 200, height: 100, side: 40 },
+  booth:    { front: 120, height: 100, side: 40 },
   'gate-free': { width: 270, height: 240, leg: 60, depth: 60, inner: 180, header: 60, bags: 5 },
 }
 
 export const FIELD_LABELS = {
   width:  'רוחב כולל',
+  front:  'רוחב החזית',
   height: 'גובה',
   wing:   'רוחב כנף',
   leg:    'רוחב רגל',
