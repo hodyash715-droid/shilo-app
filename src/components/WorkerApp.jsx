@@ -4,12 +4,16 @@ import { EmpAvatar } from './ui.jsx'
 import AvailPicker from './AvailPicker.jsx'
 import Bell from './Bell.jsx'
 import NotifOptIn from './NotifOptIn.jsx'
+import LoadingList from './LoadingList.jsx'
 
 const DAYS_AHEAD = 28
 
 export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, onSetAvailMany, onSignOut, notifs = [], onNotifRead, onNotifReadAll }) {
   const [tab, setTab] = useState('avail')
   const [picker, setPicker] = useState(null)
+  // רשימות ההעמסה נטענות רק כשפותחים אותן: הפתיחה גם זורעת את
+  // הערכה הקבועה בטבלה, ואין טעם לעשות את זה לכל משמרת מראש.
+  const [openLoad, setOpenLoad] = useState({})
 
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => {
     const d = new Date(TODAY); d.setDate(d.getDate() + i); return d
@@ -152,6 +156,23 @@ export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, 
                           </div>
                           <a className="btn btn-sm btn-solid" style={{ flex: '0 0 auto' }}
                             href={wazeLink(place)} target="_blank" rel="noreferrer">🧭 ניווט</a>
+                        </div>
+                      )}
+
+                      {/* העמסה. רק להתקנה — בפירוק מפרקים ומחזירים,
+                          לא מעמיסים לפי רשימה. */}
+                      {job && !teardown && (
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--hair)' }}>
+                          <button className="btn btn-sm row between" style={{ width: '100%' }}
+                            onClick={() => setOpenLoad(o => ({ ...o, [s.id]: !o[s.id] }))}>
+                            <span>📦 רשימת העמסה</span>
+                            <span className="t-meta">{openLoad[s.id] ? '▲' : '▼'}</span>
+                          </button>
+                          {openLoad[s.id] && (
+                            <div style={{ marginTop: 10 }}>
+                              <LoadingList jobId={job.id} compact />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

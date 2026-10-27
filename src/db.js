@@ -442,3 +442,64 @@ export async function rotateClientToken(id, token) {
   if (error) throw error
   return data
 }
+
+// ============================================================
+// רשימת העמסה
+// ============================================================
+
+// הערכה הקבועה — מה שתמיד עולה על האוטו
+export async function fetchLoadingDefaults() {
+  const { data, error } = await supabase
+    .from('loading_defaults').select('*').order('sort').order('label')
+  if (error) throw error
+  return data
+}
+export async function createLoadingDefault(row) {
+  const { data, error } = await supabase.from('loading_defaults').insert(row).select().single()
+  if (error) throw error
+  return data
+}
+export async function updateLoadingDefault(id, patch) {
+  const { data, error } = await supabase.from('loading_defaults')
+    .update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+export async function deleteLoadingDefault(id) {
+  const { error } = await supabase.from('loading_defaults').delete().eq('id', id)
+  if (error) throw error
+}
+
+// רשימת ההעמסה של עבודה
+export async function fetchJobLoading(jobId) {
+  const { data, error } = await supabase
+    .from('job_loading').select('*').eq('job_id', jobId)
+    .order('sort').order('created_at')
+  if (error) throw error
+  return data
+}
+// מוסיפה את הערכה הקבועה למי שעוד אין לו אותה. בטוח לקרוא שוב.
+export async function ensureJobLoading(jobId) {
+  const { error } = await supabase.rpc('ensure_job_loading', { p_job: jobId })
+  if (error) throw error
+}
+export async function addLoadingItem(row) {
+  const { data, error } = await supabase.from('job_loading').insert(row).select().single()
+  if (error) throw error
+  return data
+}
+export async function updateLoadingItem(id, patch) {
+  const { data, error } = await supabase.from('job_loading')
+    .update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+export async function deleteLoadingItem(id) {
+  const { error } = await supabase.from('job_loading').delete().eq('id', id)
+  if (error) throw error
+}
+// סימון. דרך פונקציה — עובד רשאי לסמן אבל לא לשנות שמות וכמויות.
+export async function setLoadingDone(id, done) {
+  const { error } = await supabase.rpc('set_loading_done', { p_id: id, p_done: done })
+  if (error) throw error
+}

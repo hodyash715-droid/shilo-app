@@ -4,6 +4,7 @@ import { Thumb, catLabel, EmpAvatar } from './ui.jsx'
 import ShiftEdit from './ShiftEdit.jsx'
 import Thread from './Thread.jsx'
 import FileList from './FileList.jsx'
+import LoadingList from './LoadingList.jsx'
 import { fetchJobMessages, postJobMessage, fetchJobFiles, uploadJobFile, deleteJobFile, signedFileUrl } from '../db.js'
 
 export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, employees, availability = [], onShiftSaved, onShiftDeleted, onQuote, koolisot = [], onDesign, clients = [], onShowPrices }) {
@@ -365,6 +366,12 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
               )}
             </>
           )}
+
+          {/* העמסה — מה שעולה על האוטו. העובד המשובץ רואה את אותה
+              רשימה בכרטיס המשמרת שלו ביום העבודה, ומסמן ✓ */}
+          <div style={{ marginBottom: 18 }}>
+            <LoadingList jobId={job.id} editable koolisot={jobKool} />
+          </div>
 
           {/* פריטים */}
           <div className="row between" style={{ marginBottom: 8 }}>
