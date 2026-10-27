@@ -25,7 +25,17 @@ import { VERSION } from './version.js'
 const displayName = (email) => ({ shai: 'שי' })[(email || '').split('@')[0]] || (email || '').split('@')[0] || 'שי'
 
 // חשבונות מנהל. כל חשבון אחר הוא עובד — וללא כרטיס עובד מקושר אין גישה.
+// רשת ביטחון בלבד. ההרשאה האמיתית היא תיבת הסימון בכרטיס העובד
+// (employees.is_manager), ושי כאן כדי שאי אפשר יהיה לנעול את כולם
+// בחוץ בטעות. אותה רשימה בדיוק נמצאת ב-is_manager() שבמסד.
 const MANAGERS = ['shai@shilo.app']
+
+// מי מנהל: ברשימה הקבועה, או מסומן בכרטיס שלו.
+const managerOf = (session, employees) => {
+  const email = (session?.user?.email || '').toLowerCase()
+  if (MANAGERS.includes(email)) return true
+  return !!employees?.find(e => e.user_id === session?.user?.id)?.is_manager
+}
 
 function NotLinked({ email, onSignOut }) {
   return (
@@ -198,7 +208,7 @@ export default function App() {
   }, [session, dataReady, employees])
 
   // ---- מרכז התראות ----
-  const isManagerNow = MANAGERS.includes((session?.user?.email || '').toLowerCase())
+  const isManagerNow = managerOf(session, employees)
 
   const loadNotifs = async (announce) => {
     try {
@@ -368,8 +378,8 @@ export default function App() {
 
   // תפקיד: מנהל רק לפי רשימה מפורשת. כל השאר — עובד.
   const email = (session.user?.email || '').toLowerCase()
-  const isManager = MANAGERS.includes(email)
   const me = employees.find(e => e.user_id === session.user?.id) || null
+  const isManager = managerOf(session, employees)
 
   if (!isManager) {
     if (!me) return <><NotLinked email={email} onSignOut={() => supabase.auth.signOut()} /><VersionBadge /></>
@@ -428,6 +438,7 @@ export default function App() {
               jobs={jobs} onSave={onKoolisaSave} onDelete={onKoolisaDelete}
               target={designTarget} onTargetUsed={() => setDesignTarget(null)} />}
             {view === 'settings' && <Settings name={displayName(session.user?.email)}
+              selfUserId={session.user?.id}
               email={session.user?.email} onSignOut={() => supabase.auth.signOut()}
               employees={employees} onEmpSaved={onEmpSaved} onEmpDeleted={onEmpDeleted}
               clients={clients} onClientSaved={onClientSaved} onClientDeleted={onClientDeleted}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { createEmployee, updateEmployee, deleteEmployee } from '../db.js'
 
-const blank = () => ({ name: '', role: '', phone: '', rate: '', active: true })
+const blank = () => ({ name: '', role: '', phone: '', rate: '', active: true, is_manager: false })
 const ROLES = ['מתקין', 'נהג', 'אחראי אתר', 'כללי']
 
 // קוד ההצטרפות הוא המפתח לכרטיס העובד — 8 תווים מאקראיות אמיתית.
@@ -14,7 +14,7 @@ const genCode = () => {
 }
 const CODE_DAYS = 14
 
-export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
+export default function EmployeeEdit({ emp, selfUserId = null, onClose, onSaved, onDeleted }) {
   const editing = Boolean(emp && emp.id)
   const [f, setF] = useState(() => emp ? { ...blank(), ...emp } : blank())
   const [busy, setBusy] = useState(false)
@@ -31,6 +31,7 @@ export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
       const payload = {
         name: f.name.trim(), role: f.role.trim(), phone: f.phone.trim(),
         rate: f.rate === '' ? null : Number(f.rate), active: f.active,
+        is_manager: !!f.is_manager,
         ...(editing ? {} : {
           join_code: genCode(),
           join_expires_at: new Date(Date.now() + CODE_DAYS * 864e5).toISOString(),
@@ -56,6 +57,34 @@ export default function EmployeeEdit({ emp, onClose, onSaved, onDeleted }) {
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>{label('שם מלא')}<input className="field" value={f.name} onChange={e => set('name', e.target.value)} placeholder="יוסי כהן" /></div>
+
+          {/* ההרשאה. אי אפשר לבטל את עצמך — זו דרך מהירה לנעול את
+              עצמך בחוץ מהמסך שבו מתקנים את זה. */}
+          {(() => {
+            const isSelf = !!selfUserId && emp?.user_id === selfUserId
+            return (
+              <div className="card" style={{ padding: 12 }}>
+                <label className="row gap-2" style={{
+                  alignItems: 'flex-start',
+                  cursor: isSelf ? 'default' : 'pointer', opacity: isSelf ? .65 : 1,
+                }}>
+                  <input type="checkbox" checked={!!f.is_manager} disabled={isSelf}
+                    style={{ width: 20, height: 20, marginTop: 2, flex: '0 0 auto' }}
+                    onChange={e => set('is_manager', e.target.checked)} />
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ fontWeight: 700 }}>מנהל</span>
+                    <div className="t-meta" style={{ marginTop: 2, lineHeight: 1.6 }}>
+                      {isSelf
+                        ? 'זה הכרטיס שלך. מנהל אחר יכול לשנות את ההרשאה שלך.'
+                        : f.is_manager
+                          ? 'רואה את כל המערכת: עבודות, לקוחות, צוות והגדרות.'
+                          : 'רואה רק את המשמרות והעבודות שלו.'}
+                    </div>
+                  </span>
+                </label>
+              </div>
+            )
+          })()}
           <div>{label('תפקיד')}
             <input className="field" value={f.role} onChange={e => set('role', e.target.value)} placeholder="מתקין · אחראי אתר" list="roles" />
             <datalist id="roles">{ROLES.map(r => <option key={r} value={r} />)}</datalist>

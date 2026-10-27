@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { EmpAvatar } from './ui.jsx'
 import EmployeeEdit from './EmployeeEdit.jsx'
 
-export default function EmployeeList({ employees, onSaved, onDeleted }) {
+export default function EmployeeList({ employees, selfUserId = null, onSaved, onDeleted }) {
   const [edit, setEdit] = useState(undefined) // undefined=closed, null=new, emp=edit
 
   return (
@@ -44,7 +44,7 @@ export default function EmployeeList({ employees, onSaved, onDeleted }) {
       )}
 
       {edit !== undefined && (
-        <EmployeeEdit emp={edit}
+        <EmployeeEdit emp={edit} selfUserId={selfUserId}
           onClose={() => setEdit(undefined)}
           onSaved={(s) => { onSaved(s); setEdit(undefined) }}
           onDeleted={(id) => { onDeleted(id); setEdit(undefined) }} />

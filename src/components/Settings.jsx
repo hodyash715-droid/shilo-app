@@ -4,7 +4,7 @@ import NotifOptIn from './NotifOptIn.jsx'
 import EmployeeList from './EmployeeList.jsx'
 import ClientList from './ClientList.jsx'
 
-export default function Settings({ name, email, onSignOut, employees, onEmpSaved, onEmpDeleted, clients = [], onClientSaved, onClientDeleted, jobs = [] }) {
+export default function Settings({ name, email, selfUserId = null, onSignOut, employees, onEmpSaved, onEmpDeleted, clients = [], onClientSaved, onClientDeleted, jobs = [] }) {
   const Row = ({ label, value }) => (
     <div className="row between" style={{ padding: '13px 14px', borderTop: '1px solid var(--hair)' }}>
       <span className="t-meta">{label}</span>
@@ -37,7 +37,7 @@ export default function Settings({ name, email, onSignOut, employees, onEmpSaved
         <span style={{ fontWeight: 700, fontSize: 16 }}>ניהול עובדים</span>
       </div>
       <div style={{ marginBottom: 20 }}>
-        <EmployeeList employees={employees} onSaved={onEmpSaved} onDeleted={onEmpDeleted} />
+        <EmployeeList employees={employees} selfUserId={selfUserId} onSaved={onEmpSaved} onDeleted={onEmpDeleted} />
       </div>
 
       <div className="row gap-2" style={{ margin: '4px 0 12px' }}>
