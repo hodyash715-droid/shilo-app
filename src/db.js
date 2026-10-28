@@ -507,3 +507,21 @@ export async function setLoadingDone(id, done) {
   const { error } = await supabase.rpc('set_loading_done', { p_id: id, p_done: done })
   if (error) throw error
 }
+
+// ---------- חזרה למחסן ----------
+// done ו-returned הם שני דגלים נפרדים על אותה שורה: מה שהועמס
+// ביציאה, ומה שחזר בסוף. דגל אחד לא היה מבדיל בין "לא נלקח" ל"אבד".
+export async function setLoadingReturned(id, returned) {
+  const { error } = await supabase.rpc('set_loading_returned', { p_id: id, p_returned: returned })
+  if (error) throw error
+}
+export async function setAllLoadingReturned(jobId, returned) {
+  const { error } = await supabase.rpc('set_all_loading_returned', { p_job: jobId, p_returned: returned })
+  if (error) throw error
+}
+// מחזיר { total, missing, list } ובמקביל כותב התראה לשי
+export async function reportLoadingReturn(jobId) {
+  const { data, error } = await supabase.rpc('report_loading_return', { p_job: jobId })
+  if (error) throw error
+  return data
+}

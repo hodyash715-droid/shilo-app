@@ -18,6 +18,7 @@ import React, { useEffect, useState } from 'react'
 import {
   fetchJobLoading, ensureJobLoading, addLoadingItem,
   deleteLoadingItem, setLoadingDone,
+  setLoadingReturned, setAllLoadingReturned, reportLoadingReturn,
 } from '../db.js'
 
 // עד שמריצים loading.sql, הטבלה לא קיימת ו-PostgREST מחזיר
@@ -61,12 +62,19 @@ const groupRows = (rows) => {
   return out
 }
 
-export default function LoadingList({ jobId, editable = false, readOnly = false, compact = false }) {
+export default function LoadingList({
+  jobId, editable = false, readOnly = false, compact = false, mode = 'load',
+}) {
   const [rows, setRows] = useState(null)      // null = עוד נטען
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [label, setLabel] = useState('')
   const [qty, setQty] = useState('')
+  const [report, setReport] = useState(null)  // תוצאת הדיווח האחרון
+
+  // במצב חזרה התיבה מסמנת "חזר למחסן", לא "הועמס".
+  const ret = mode === 'return'
+  const flagOf = (r) => (ret ? !!r.returned : !!r.done)
 
   const load = async () => {
     try {
@@ -78,10 +86,32 @@ export default function LoadingList({ jobId, editable = false, readOnly = false,
 
   const toggle = async (row) => {
     if (readOnly) return
+    const key = ret ? 'returned' : 'done'
+    const next = !flagOf(row)
     // אופטימי: הסימון חייב להרגיש מיידי כשעומדים ליד האוטו
-    setRows(rs => rs.map(r => r.id === row.id ? { ...r, done: !r.done } : r))
-    try { await setLoadingDone(row.id, !row.done) }
+    setRows(rs => rs.map(r => r.id === row.id ? { ...r, [key]: next } : r))
+    setReport(null)
+    try {
+      if (ret) await setLoadingReturned(row.id, next)
+      else await setLoadingDone(row.id, next)
+    } catch (e) { setErr('הסימון לא נשמר: ' + loadingErr(e)); load() }
+  }
+
+  // "הכל חזר" — סימון כל השורות בבת אחת, אחרי בדיקה אחת של העובד
+  const markAllReturned = async () => {
+    setBusy(true); setErr(''); setReport(null)
+    setRows(rs => rs.map(r => ({ ...r, returned: true })))
+    try { await setAllLoadingReturned(jobId, true) }
     catch (e) { setErr('הסימון לא נשמר: ' + loadingErr(e)); load() }
+    setBusy(false)
+  }
+
+  // דיווח לשי. ירוק אם הכל חזר, אדום עם מה שחסר אם לא.
+  const sendReport = async () => {
+    setBusy(true); setErr('')
+    try { setReport(await reportLoadingReturn(jobId)) }
+    catch (e) { setErr('הדיווח לא נשלח: ' + loadingErr(e)) }
+    setBusy(false)
   }
 
   const add = async () => {
@@ -108,13 +138,15 @@ export default function LoadingList({ jobId, editable = false, readOnly = false,
     return <div className="t-meta" style={{ padding: 10 }}>טוען רשימת העמסה…</div>
   }
 
-  const doneCount = rows.filter(r => r.done).length
+  const doneCount = rows.filter(flagOf).length
+  const missing = rows.filter(r => !r.returned)
   const groups = groupRows(rows)
+  const title = ret ? 'חזרה למחסן' : readOnly ? 'מה שיצא לאירוע' : 'רשימת העמסה'
 
   return (
     <div>
       <div className="row between" style={{ marginBottom: 8 }}>
-        <div className="t-meta">{readOnly ? 'מה שיצא לאירוע' : 'רשימת העמסה'}</div>
+        <div className="t-meta">{title}</div>
         <div className="t-meta mono">
           {doneCount}/{rows.length}
         </div>
@@ -137,7 +169,7 @@ export default function LoadingList({ jobId, editable = false, readOnly = false,
         <div className="card" style={{ padding: 14, borderStyle: 'dashed', textAlign: 'center' }}>
           <div style={{ fontWeight: 600 }}>הרשימה ריקה</div>
           <div className="muted" style={{ fontSize: 13 }}>
-            {editable ? 'הוסף פריטים למטה, או מלא את הערכה הקבועה בהגדרות.' : 'שי עוד לא הכין רשימה לעבודה הזו.'}
+            {editable ? 'הוסף פריטים למטה, או מלא את הערכה הקבועה במסך בשטח.' : 'שי עוד לא הכין רשימה לעבודה הזו.'}
           </div>
         </div>
       )}
@@ -153,18 +185,25 @@ export default function LoadingList({ jobId, editable = false, readOnly = false,
               <div key={r.id} className="row gap-2" style={{
                 background: 'var(--card-2)', border: '1px solid var(--line)',
                 borderRadius: 8, padding: compact ? '8px 10px' : 10,
-                opacity: r.done ? .62 : 1,
+                opacity: flagOf(r) ? .62 : 1,
               }}>
                 <label className="row gap-2 grow" style={{
                   minWidth: 0, cursor: readOnly ? 'default' : 'pointer', alignItems: 'center',
                 }}>
-                  <input type="checkbox" checked={!!r.done} disabled={readOnly} onChange={() => toggle(r)}
-                    style={{ accentColor: 'var(--gold)', width: 22, height: 22, flex: '0 0 auto' }} />
+                  <input type="checkbox" checked={flagOf(r)} disabled={readOnly} onChange={() => toggle(r)}
+                    style={{
+                      accentColor: ret ? 'var(--go)' : 'var(--gold)',
+                      width: 22, height: 22, flex: '0 0 auto',
+                    }} />
                   <span className="grow truncate" style={{
                     fontWeight: 600, fontSize: 14,
-                    textDecoration: r.done ? 'line-through' : 'none',
+                    textDecoration: flagOf(r) ? 'line-through' : 'none',
                   }}>{r.label}</span>
                 </label>
+                {/* אצל שי: תג קטן על מה שכבר חזר, בלי להיכנס למצב חזרה */}
+                {editable && r.returned && (
+                  <span className="t-meta" style={{ color: 'var(--go)', flex: '0 0 auto' }}>חזר</span>
+                )}
                 {r.qty && <span className={qtyCls(r.qty)} style={{ flex: '0 0 auto' }}>{r.qty}</span>}
                 {editable && (
                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', flex: '0 0 auto' }}
@@ -179,6 +218,54 @@ export default function LoadingList({ jobId, editable = false, readOnly = false,
       {readOnly && rows.length > 0 && (
         <div className="t-meta">
           הסימונים הם של צוות ההתקנה. בפירוק הרשימה לבדיקה בלבד, כדי שלא יימחק מה שהם סימנו.
+        </div>
+      )}
+
+      {ret && rows.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          <div className="row gap-2">
+            <button className="btn btn-sm grow" disabled={busy || !missing.length}
+              onClick={markAllReturned}>✓ הכל חזר</button>
+            <button className="btn btn-solid btn-sm grow" disabled={busy}
+              onClick={sendReport}>דווח לשי</button>
+          </div>
+
+          {/* מה שחסר, לפני ששולחים — כדי שלא ידווח בטעות */}
+          {missing.length > 0 && (
+            <div style={{
+              marginTop: 8, padding: '9px 11px', borderRadius: 8,
+              background: 'var(--card-2)', borderInlineStart: '3px solid var(--danger)',
+            }}>
+              <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--danger)' }}>
+                חסרים {missing.length} פריטים
+              </div>
+              <div className="t-meta" style={{ marginTop: 2 }}>
+                {missing.slice(0, 6).map(r => r.label).join(' · ')}
+                {missing.length > 6 && ` ועוד ${missing.length - 6}`}
+              </div>
+            </div>
+          )}
+
+          {report && (
+            <div style={{
+              marginTop: 8, padding: '9px 11px', borderRadius: 8,
+              background: 'var(--card-2)',
+              borderInlineStart: `3px solid var(--${report.missing ? 'danger' : 'go'})`,
+            }}>
+              <div style={{
+                fontWeight: 600, fontSize: 13.5,
+                color: `var(--${report.missing ? 'danger' : 'go'})`,
+              }}>
+                {report.missing
+                  ? `דווח לשי: ${report.missing} מתוך ${report.total} לא חזרו`
+                  : `דווח לשי: הכל חזר · ${report.total} פריטים`}
+              </div>
+            </div>
+          )}
+
+          <div className="t-meta" style={{ marginTop: 6 }}>
+            סמן מה חזר למחסן, ואז דווח. שי יקבל התראה ירוקה אם הכל חזר, ואדומה עם מה שחסר אם לא.
+          </div>
         </div>
       )}
 
@@ -197,7 +284,7 @@ export default function LoadingList({ jobId, editable = false, readOnly = false,
               disabled={busy || !label.trim()} onClick={add}>הוסף</button>
           </div>
           <div className="t-meta" style={{ marginTop: 6 }}>
-            הקוליסות נכנסות לבד מהתכנון. הערכה הקבועה נערכת ב<b>הגדרות ← ערכת העמסה</b>.
+            הקוליסות נכנסות לבד מהתכנון. הערכה הקבועה נערכת ב<b>בשטח ← ערכת העמסה</b>.
           </div>
         </>
       )}

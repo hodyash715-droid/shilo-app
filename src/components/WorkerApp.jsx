@@ -159,19 +159,20 @@ export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, 
                         </div>
                       )}
 
-                      {/* כל עובד שמשובץ לעבודה רואה את הרשימה. בפירוק
-                          היא לקריאה בלבד — הסימונים שם הם של צוות
-                          ההתקנה, וביטול שלהם היה מוחק את תיעוד ההעמסה. */}
+                      {/* כל עובד שמשובץ לעבודה רואה את הרשימה. בהתקנה
+                          הוא מסמן מה הועמס; בפירוק הוא מסמן מה חזר
+                          למחסן ומדווח לשי. שני דגלים נפרדים, כדי
+                          שסימון החזרה לא ימחק את תיעוד ההעמסה. */}
                       {job && (
                         <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--hair)' }}>
                           <button className="btn btn-sm row between" style={{ width: '100%' }}
                             onClick={() => setOpenLoad(o => ({ ...o, [s.id]: !o[s.id] }))}>
-                            <span>📦 {teardown ? 'מה שיצא לאירוע' : 'רשימת העמסה'}</span>
+                            <span>{teardown ? '🏠 חזרה למחסן' : '📦 רשימת העמסה'}</span>
                             <span className="t-meta">{openLoad[s.id] ? '▲' : '▼'}</span>
                           </button>
                           {openLoad[s.id] && (
                             <div style={{ marginTop: 10 }}>
-                              <LoadingList jobId={job.id} compact readOnly={teardown} />
+                              <LoadingList jobId={job.id} compact mode={teardown ? 'return' : 'load'} />
                             </div>
                           )}
                         </div>

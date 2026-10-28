@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
 
-const ICONS = { order: '📥', quote: '💰', shift: '🗓', info: '•' }
+const ICONS = {
+  order: '📥', quote: '💰', shift: '🗓', info: '•',
+  return_ok: '✅', return_missing: '⚠️',
+}
+
+// דיווח חזרה למחסן נקרא בהצצה אחת: ירוק אם הכל חזר, אדום אם חסר.
+// פס צבע בקצה ולא רקע, כדי שיעבוד גם בבהיר וגם בכהה.
+const STRIPE = { return_ok: 'var(--go)', return_missing: 'var(--danger)' }
 
 // "לפני 5 דק׳" / "אתמול 14:30"
 function ago(iso) {
@@ -72,11 +79,15 @@ export default function Bell({ items = [], onOpen, onRead, onReadAll }) {
                 font: 'inherit', color: 'var(--ink)', padding: '11px 13px',
                 borderTop: i ? '1px solid var(--hair)' : 0,
                 background: n.is_read ? 'transparent' : 'var(--gold-bg)',
+                borderInlineStart: STRIPE[n.kind] ? `3px solid ${STRIPE[n.kind]}` : 0,
                 display: 'flex', gap: 10, alignItems: 'flex-start',
               }}>
               <span style={{ fontSize: 15, lineHeight: 1.4 }}>{ICONS[n.kind] || ICONS.info}</span>
               <span style={{ minWidth: 0, flex: 1 }}>
-                <span style={{ display: 'block', fontWeight: n.is_read ? 500 : 700, fontSize: 14 }}>{n.title}</span>
+                <span style={{
+                  display: 'block', fontWeight: n.is_read ? 500 : 700, fontSize: 14,
+                  color: STRIPE[n.kind] || 'inherit',
+                }}>{n.title}</span>
                 {n.body && <span className="t-meta" style={{ display: 'block', marginTop: 1 }}>{n.body}</span>}
                 <span className="t-meta" style={{ display: 'block', marginTop: 3, opacity: .7 }}>{ago(n.created_at)}</span>
               </span>

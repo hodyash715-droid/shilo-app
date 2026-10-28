@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { fmtDate, relLabel, daysUntil, shiftKindLabel } from '../data.js'
 import { Thumb } from './ui.jsx'
 import InventoryEdit from './InventoryEdit.jsx'
+import LoadingKit from './LoadingKit.jsx'
 
 const notReturned = it => !it.returned
 
@@ -96,8 +97,17 @@ export default function Field({ jobs, shifts, inventory, onItemReturn, onAllRetu
         </div>
       )}
 
+      {/* ערכת העמסה — כאן ולא בהגדרות: זה ציוד, והוא שייך לצד
+          של המלאי ולא לצד של החשבון. */}
+      <div style={{ marginTop: 26 }}>
+        {sectionTitle('ערכת העמסה')}
+        <LoadingKit />
+      </div>
+
       {/* מלאי */}
-      {sectionTitle('מלאי', <button className="btn btn-sm" onClick={() => setInvEdit(null)}>＋ פריט</button>)}
+      <div style={{ marginTop: 26 }}>
+        {sectionTitle('מלאי', <button className="btn btn-sm" onClick={() => setInvEdit(null)}>＋ פריט</button>)}
+      </div>
 
       {inventory.length === 0 ? (
         <div className="card" style={{ padding: 24, textAlign: 'center', borderStyle: 'dashed' }}>

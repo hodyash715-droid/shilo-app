@@ -1,4 +1,4 @@
-import{s as ua,m as da,a as ll}from"./index-BnXfk1EY.js";/**
+import{s as ua,m as da,a as ll}from"./index-IUDe5GPw.js";/**
  * @license
  * Copyright 2010-2025 Three.js Authors
  * SPDX-License-Identifier: MIT

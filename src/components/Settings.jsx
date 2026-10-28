@@ -3,7 +3,6 @@ import { VERSION } from '../version.js'
 import NotifOptIn from './NotifOptIn.jsx'
 import EmployeeList from './EmployeeList.jsx'
 import ClientList from './ClientList.jsx'
-import LoadingKit from './LoadingKit.jsx'
 
 export default function Settings({ name, email, selfUserId = null, onSignOut, employees, onEmpSaved, onEmpDeleted, clients = [], onClientSaved, onClientDeleted, jobs = [] }) {
   const Row = ({ label, value }) => (
@@ -47,14 +46,6 @@ export default function Settings({ name, email, selfUserId = null, onSignOut, em
       </div>
       <div style={{ marginBottom: 20 }}>
         <ClientList clients={clients} onSaved={onClientSaved} onDeleted={onClientDeleted} jobs={jobs} />
-      </div>
-
-      <div className="row gap-2" style={{ margin: '4px 0 12px' }}>
-        <span style={{ width: 4, height: 18, background: 'var(--gold)', borderRadius: 2 }} />
-        <span style={{ fontWeight: 700, fontSize: 16 }}>ערכת העמסה</span>
-      </div>
-      <div style={{ marginBottom: 20 }}>
-        <LoadingKit />
       </div>
 
       <button className="btn" onClick={onSignOut} style={{ width: '100%', color: '#E5735B', height: 46 }}>
