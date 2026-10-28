@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { createEmployee, updateEmployee, deleteEmployee } from '../db.js'
+import { blankEmp as blank, toForm, rateOf } from '../empform.js'
 
-const blank = () => ({ name: '', role: '', phone: '', rate: '', active: true, is_manager: false })
 const ROLES = ['מתקין', 'נהג', 'אחראי אתר', 'כללי']
 
 // קוד ההצטרפות הוא המפתח לכרטיס העובד — 8 תווים מאקראיות אמיתית.
@@ -16,7 +16,7 @@ const CODE_DAYS = 14
 
 export default function EmployeeEdit({ emp, selfUserId = null, onClose, onSaved, onDeleted }) {
   const editing = Boolean(emp && emp.id)
-  const [f, setF] = useState(() => emp ? { ...blank(), ...emp } : blank())
+  const [f, setF] = useState(() => (emp ? toForm(emp) : blank()))
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
@@ -30,7 +30,7 @@ export default function EmployeeEdit({ emp, selfUserId = null, onClose, onSaved,
     try {
       const payload = {
         name: f.name.trim(), role: f.role.trim(), phone: f.phone.trim(),
-        rate: f.rate === '' ? null : Number(f.rate), active: f.active,
+        rate: rateOf(f.rate), active: f.active,
         is_manager: !!f.is_manager,
         ...(editing ? {} : {
           join_code: genCode(),

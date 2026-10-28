@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { jobPatchToRow } from './jobmap.js'
 
 // המרה בין שורת DB (snake_case) לצורת האפליקציה (camelCase)
 const fromRow = r => ({
@@ -31,11 +32,14 @@ const fromRow = r => ({
   referenceUrl: r.reference_url || '',
 })
 
+// toRow בונה שורה מלאה ליצירה. המרת ריק-ל-null של עמודות
+// תאריך ושעה נעשית כאן בכל שדה, וב-updateJob דרך jobmap.js.
+
 const toRow = j => ({
   title: j.title,
   client: j.client,
   contact: j.contact,
-  event_date: j.eventDate,
+  event_date: j.eventDate || null,
   status: j.status,
   price: j.price,
   items: j.items,
@@ -50,6 +54,8 @@ const toRow = j => ({
   // עם תאריך פירוק הייתה נשמרת בלעדיו בשקט.
   teardown_date: j.teardownDate || null,
   teardown_time: j.teardownTime || null,
+  setup_date: j.setupDate || null,
+  setup_time: j.setupTime || null,
 })
 
 export async function fetchJobs() {
@@ -72,18 +78,9 @@ export async function createJob(job) {
 }
 
 export async function updateJob(id, patch) {
-  // patch בצורת האפליקציה; ממירים רק את השדות שקיימים
-  const row = {}
-  const map = { title:'title', client:'client', contact:'contact', eventDate:'event_date',
-    status:'status', price:'price', items:'items', team:'team', note:'note',
-    venue:'venue', address:'address', eventTime:'event_time', clientId:'client_id',
-    showItemPrices:'show_item_prices',
-    service:'service', setupDate:'setup_date', setupTime:'setup_time',
-    teardownDate:'teardown_date', teardownTime:'teardown_time',
-    contactName:'contact_name', contactPhone:'contact_phone',
-    accessNotes:'access_notes', referenceUrl:'reference_url',
-    quoteStatus:'quote_status', quoteSentAt:'quote_sent_at', quoteDecidedAt:'quote_decided_at' }
-  for (const k in patch) if (map[k] !== undefined) row[map[k]] = patch[k]
+  // patch בצורת האפליקציה; ממירים רק את השדות שקיימים.
+  // המיפוי יושב ב-jobmap.js כדי שיהיה אפשר לבדוק אותו.
+  const row = jobPatchToRow(patch)
   const { data, error } = await supabase
     .from('jobs')
     .update(row)
@@ -484,6 +481,9 @@ export async function fetchJobLoading(jobId) {
 }
 // מוסיפה את הערכה הקבועה למי שעוד אין לו אותה. בטוח לקרוא שוב.
 export async function ensureJobLoading(jobId) {
+  // מנקה קודם שורות של קירות שנמחקו מהתכנון, ואז מסנכרן. אם
+  // clean_job_loading עוד לא הותקנה, הסנכרון בכל זאת רץ.
+  try { await supabase.rpc('clean_job_loading', { p_job: jobId }) } catch (e) {}
   const { error } = await supabase.rpc('ensure_job_loading', { p_job: jobId })
   if (error) throw error
 }
@@ -522,6 +522,15 @@ export async function setAllLoadingReturned(jobId, returned) {
 // מחזיר { total, missing, list } ובמקביל כותב התראה לשי
 export async function reportLoadingReturn(jobId) {
   const { data, error } = await supabase.rpc('report_loading_return', { p_job: jobId })
+  if (error) throw error
+  return data
+}
+
+// שיוך קיר או קוליסה שכבר נבנו במתכנן אל עבודה. משם
+// ensure_job_loading שוברת אותם לשורה לכל קוליסה ברשימת ההעמסה.
+export async function attachKoolisa(id, jobId) {
+  const { data, error } = await supabase.from('koolisot')
+    .update({ job_id: jobId }).eq('id', id).select().single()
   if (error) throw error
   return data
 }

@@ -4,7 +4,7 @@ import {
   fetchJobs, updateJob, fetchEmployees, fetchShifts, fetchInventory,
   fetchAvailability, setAvailability as saveAvailability, setAvailabilityMany, clearAvailability,
   claimEmployeeCode, fetchMyJobTitles, fetchClients,
-  fetchKoolisot, saveKoolisa, deleteKoolisa,
+  fetchKoolisot, saveKoolisa, deleteKoolisa, attachKoolisa,
   fetchNotifications, markNotifRead, markAllNotifsRead,
 } from './db.js'
 import Header from './components/Header.jsx'
@@ -337,6 +337,15 @@ export default function App() {
       return saved
     } catch (e) { showToast('השמירה נכשלה — הרץ את koolisot.sql'); return null }
   }
+  // שיוך קיר קיים לעבודה. מחזיר true/false — הקורא צריך לדעת אם
+  // זה הצליח, אחרת הוא סוגר את הפאנל כאילו הקיר שויך.
+  const onKoolisaAttach = async (id, jobId) => {
+    try {
+      const saved = await attachKoolisa(id, jobId)
+      setKoolisot(xs => xs.map(x => x.id === saved.id ? saved : x))
+      return true
+    } catch (e) { showToast('השיוך נכשל'); return false }
+  }
   const onKoolisaDelete = async (id) => {
     setKoolisot(xs => xs.filter(x => x.id !== id))
     showToast('נמחקה')
@@ -481,7 +490,9 @@ export default function App() {
           onDeleted={onDeleted}
           inventory={inventory}
           clients={clients}
+          koolisot={koolisot}
           onKoolisa={onKoolisaSave}
+          onAttach={onKoolisaAttach}
         />
       )}
 

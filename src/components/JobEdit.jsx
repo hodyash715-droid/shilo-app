@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { STATUSES, CATEGORIES, ils } from '../data.js'
 import { createJob, updateJob, deleteJob } from '../db.js'
 import { generateKulisa, defaultFrameMaterial, LIMITS_PREFERRED, BRACE_DEFAULT } from '../designer/kulisa.js'
+import { materialsFor } from '../designer/materials.js'
 
 const blank = () => ({
   title: '', client: '', contact: '', eventDate: '', eventTime: '', status: 'inquiry',
@@ -15,7 +16,7 @@ const blank = () => ({
 const KOOL_HEIGHT = 240
 const KOOL_PRESETS = LIMITS_PREFERRED.map(w => ({ w, h: KOOL_HEIGHT }))
 
-export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = [], clients = [], onKoolisa }) {
+export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = [], clients = [], koolisot = [], onKoolisa, onAttach }) {
   const editing = Boolean(job && job.id)
   const [f, setF] = useState(() => job ? { ...blank(), ...job } : blank())
   const [busy, setBusy] = useState(false)
@@ -24,6 +25,8 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
   // קוליסות שנבחרו כאן ועוד לא נוצרו — נוצרות אחרי שלעבודה יש id
   const [kool, setKool] = useState([])
   const [custom, setCustom] = useState(null)   // { w, h } כשפותחים "מידה אחרת"
+  // קירות מהמתכנן שנבחרו למשיכה — משויכים אחרי שלעבודה יש id
+  const [pull, setPull] = useState([])
   // תאריך הפירוק נגרר אחרי תאריך האירוע עד שנוגעים בו בעצמנו
   const [tdTouched, setTdTouched] = useState(() => !!(job && job.teardownDate))
   // id של עבודה שכבר נוצרה בלחיצה קודמת. בלעדיו, שמירה חוזרת אחרי
@@ -38,7 +41,11 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
   }))
   const setTeardownDate = (v) => { setTdTouched(true); set('teardownDate', v) }
 
-  const frameMat = defaultFrameMaterial(inventory)
+  // כמו באולפן: רק פריטים בקטגוריית "חומר גלם" ועוד הפרופילים
+  // הסטנדרטיים. בלי הסינון הזה defaultFrameMaterial נפל על הפריט
+  // הראשון במלאי — ועל המסך הופיע שהקוליסות ייבנו מ"במה מרכזית
+  // 8×4מ׳", כלומר רשימת חיתוך שגויה לנגר.
+  const frameMat = defaultFrameMaterial(materialsFor(inventory))
   const addKool = (w, h, qty = 1) => setKool(ks => [...ks, { w, h, qty, key: Math.random().toString(36).slice(2) }])
   const setKoolQty = (key, v) =>
     setKool(ks => ks.map(k => k.key === key ? { ...k, qty: Math.min(50, Math.max(1, Math.round(Number(v) || 1))) } : k))
@@ -69,6 +76,28 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
       setKool(ks => ks.filter(x => x.key !== k.key))
     }
   }
+
+  // ---- משיכת קיר שכבר נבנה במתכנן ----
+  // הקיר עצמו לא משוכפל; הוא רק משויך לעבודה. משם ensure_job_loading
+  // שוברת אותו לשורה לכל קוליסה ברשימת ההעמסה של העובד.
+  const koolCount = (k) =>
+    k.preview?.kind === 'wall' ? (k.parts || []).length
+    : k.preview?.kind === 'wall-layout' ? (k.preview?.wall?.widths || []).length
+    : 0
+  const isWall = (k) => k.preview?.kind === 'wall' || k.preview?.kind === 'wall-layout'
+  // קירות שעוד לא שויכו לאף עבודה, ושלא נבחרו כאן כבר
+  const freeWalls = (koolisot || []).filter(k =>
+    isWall(k) && !k.job_id && !pull.some(p => p.id === k.id))
+
+  const attachWalls = async (jobId) => {
+    if (!pull.length || !onAttach) return
+    for (const w of [...pull]) {
+      const ok = await onAttach(w.id, jobId)
+      if (!ok) throw new Error(`"${w.name}" לא שויך לעבודה`)
+      setPull(ps => ps.filter(x => x.id !== w.id))
+    }
+  }
+
   const total = f.items.reduce((s, it) => s + (Number(it.price) || 0), 0)
 
   const addItem = () => set('items', [...f.items, { cat: 'backdrop', name: '', qty: 1, price: 0 }])
@@ -102,9 +131,9 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
       setNewId(saved.id)
       // הקוליסות נוצרות רק אחרי שלעבודה יש id. אם זה נכשל, העבודה
       // כבר נשמרה — אומרים את זה במקום לסגור ולהשאיר אותו לגלות לבד.
-      try { await createKoolisot(saved.id) }
+      try { await createKoolisot(saved.id); await attachWalls(saved.id) }
       catch (ke) {
-        setErr('העבודה נשמרה, אבל הקוליסות לא נוצרו: ' + (ke.message || ke))
+        setErr('העבודה נשמרה, אבל הקוליסות לא שויכו: ' + (ke.message || ke))
         setBusy(false)
         return
       }
@@ -181,6 +210,45 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
 
           {/* קוליסות מקושרות — נוצרות עם העבודה, ומשם נכנסות גם
               לתכנון וגם לרשימת ההעמסה. אותו מחולל של האולפן. */}
+          {/* קיר מהמתכנן — משויך לעבודה, ומופיע אצל העובד שבור
+              לקוליסות שממנו הוא מורכב */}
+          <div>
+            {label('קיר מהמתכנן')}
+            <select className="field" value="" onChange={e => {
+              const w = freeWalls.find(k => k.id === e.target.value)
+              if (w) setPull(ps => [...ps, w])
+            }} disabled={!freeWalls.length}>
+              <option value="">
+                {freeWalls.length ? '＋ משוך קיר…' : 'אין קירות פנויים במתכנן'}
+              </option>
+              {freeWalls.map(k => (
+                <option key={k.id} value={k.id}>
+                  {k.name} · {koolCount(k)} קוליסות
+                </option>
+              ))}
+            </select>
+
+            {pull.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                {pull.map(w => (
+                  <div key={w.id} className="row gap-2" style={{
+                    background: 'var(--card-2)', border: '1px solid var(--line)', borderRadius: 8, padding: 8,
+                  }}>
+                    <span className="grow truncate" style={{ fontWeight: 600, fontSize: 14 }}>🏗️ {w.name}</span>
+                    <span className="t-meta" style={{ flex: '0 0 auto' }}>{koolCount(w)} קוליסות</span>
+                    <button className="btn btn-ghost btn-sm" type="button"
+                      onClick={() => setPull(ps => ps.filter(x => x.id !== w.id))} aria-label="הסר">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="t-meta" style={{ marginTop: 6 }}>
+              הקיר לא משוכפל — הוא משויך לעבודה. אצל העובד הוא יופיע
+              ברשימת ההעמסה שבור לקוליסות שממנו הוא מורכב.
+            </div>
+          </div>
+
           <div>
             {label('קוליסות מקושרות')}
             <select className="field" value="" onChange={e => {
