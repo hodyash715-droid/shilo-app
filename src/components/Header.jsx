@@ -4,7 +4,7 @@ import Bell from './Bell.jsx'
 
 export default function Header({ view, setView, onNew, email, onSignOut, notifs = [], onNotifOpen, onNotifRead, onNotifReadAll }) {
   return (
-    <header style={{
+    <header className="app-header" style={{
       position: 'sticky', top: 0, zIndex: 20,
       background: 'color-mix(in srgb, var(--paper) 88%, transparent)',
       backdropFilter: 'blur(8px)',

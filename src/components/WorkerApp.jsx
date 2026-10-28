@@ -40,7 +40,7 @@ export default function WorkerApp({ me, jobs, shifts, availability, onSetAvail, 
   return (
     <div style={{ minHeight: '100%', paddingBottom: 30 }}>
       {/* כותרת */}
-      <header style={{
+      <header className="app-header" style={{
         position: 'sticky', top: 0, zIndex: 20,
         background: 'color-mix(in srgb, var(--paper) 88%, transparent)',
         backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--line)',

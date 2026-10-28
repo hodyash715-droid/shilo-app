@@ -22,7 +22,15 @@ import WorkerApp from './components/WorkerApp.jsx'
 import ClientPortal from './components/ClientPortal.jsx'
 import { VERSION } from './version.js'
 
-const displayName = (email) => ({ shai: 'שי' })[(email || '').split('@')[0]] || (email || '').split('@')[0] || 'שי'
+// השם מגיע מכרטיס העובד. מי שהצטרף עם קוד מקבל אימייל אקראי
+// (kwcprztz@shilo.app), וקודם לכן זה הופיע על המסך כ"צהריים טובים,
+// kwcprztz". האימייל נשאר רק כגיבוי למי שאין לו עדיין כרטיס.
+const displayName = (session, employees) => {
+  const card = employees?.find(e => e.user_id === session?.user?.id)?.name
+  if (card) return card
+  const local = (session?.user?.email || '').split('@')[0]
+  return ({ shai: 'שי' })[local] || local || 'שי'
+}
 
 // חשבונות מנהל. כל חשבון אחר הוא עובד — וללא כרטיס עובד מקושר אין גישה.
 // רשת ביטחון בלבד. ההרשאה האמיתית היא תיבת הסימון בכרטיס העובד
@@ -420,7 +428,7 @@ export default function App() {
         ? <BoardSkeleton />
         : <div className="fade-in" key={view}>
             {view === 'home' && (
-              <Home jobs={jobs} name={displayName(session.user?.email)}
+              <Home jobs={jobs} name={displayName(session, employees)}
                 onOpen={j => setOpenId(j.id)} onStatus={setStatus} onEdit={j => setEditTarget(j)}
                 shifts={shifts} employees={employees} />
             )}
@@ -437,7 +445,7 @@ export default function App() {
             {view === 'design' && <Designer inventory={inventory} koolisot={koolisot}
               jobs={jobs} onSave={onKoolisaSave} onDelete={onKoolisaDelete}
               target={designTarget} onTargetUsed={() => setDesignTarget(null)} />}
-            {view === 'settings' && <Settings name={displayName(session.user?.email)}
+            {view === 'settings' && <Settings name={displayName(session, employees)}
               selfUserId={session.user?.id}
               email={session.user?.email} onSignOut={() => supabase.auth.signOut()}
               employees={employees} onEmpSaved={onEmpSaved} onEmpDeleted={onEmpDeleted}

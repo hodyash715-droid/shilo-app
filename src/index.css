@@ -207,9 +207,23 @@ body {
   .print-sheet canvas { width: 100% !important; height: auto !important; }
 }
 
+/* --- אזורים בטוחים (אייפון) ---
+   viewport-fit=cover עם black-translucent פורש את העמוד מתחת לשעון
+   ולפס הבית. הקצה התחתון טופל מזמן בטאב-בר; הקצה העליון לא, ולכן
+   הכותרת הדביקה נחתכה מתחת לשעון. */
+.app-header { padding-top: env(safe-area-inset-top); }
+
 /* פאנל צד — החלקה פנימה */
 @keyframes jd-in { from { transform: translateX(-8%); opacity: .4; } to { transform: none; opacity: 1; } }
-.jd-panel { animation: jd-in .16s ease-out; }
+.jd-panel {
+  animation: jd-in .16s ease-out;
+  /* הפאנל יושב על inset:0, כלומר על כל אזור התצוגה כולל מתחת לפס
+     הבית. בלי הריפוד הזה כפתור השמירה בתחתית הפאנל יושב מתחת לפס
+     ואי אפשר ללחוץ עליו באייפון. box-sizing גלובלי הוא border-box,
+     ולכן הריפוד נגרע מהגובה ולא מוסיף גלילה. */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
 
 /* מובייל */
 @media (max-width: 560px) {
