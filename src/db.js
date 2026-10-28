@@ -46,6 +46,10 @@ const toRow = j => ({
   event_time: j.eventTime || null,
   client_id: j.clientId || null,
   show_item_prices: !!j.showItemPrices,
+  // updateJob ידע למפות את אלה מזמן, אבל היצירה לא — עבודה חדשה
+  // עם תאריך פירוק הייתה נשמרת בלעדיו בשקט.
+  teardown_date: j.teardownDate || null,
+  teardown_time: j.teardownTime || null,
 })
 
 export async function fetchJobs() {

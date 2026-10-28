@@ -370,7 +370,7 @@ export default function JobDetail({ job, onClose, onStatus, onEdit, shifts, empl
           {/* העמסה — מה שעולה על האוטו. העובד המשובץ רואה את אותה
               רשימה בכרטיס המשמרת שלו ביום העבודה, ומסמן ✓ */}
           <div style={{ marginBottom: 18 }}>
-            <LoadingList jobId={job.id} editable koolisot={jobKool} />
+            <LoadingList jobId={job.id} editable />
           </div>
 
           {/* פריטים */}

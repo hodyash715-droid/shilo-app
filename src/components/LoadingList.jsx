@@ -1,12 +1,17 @@
 // ============================================================
 // רשימת ההעמסה של עבודה.
 //
-// אותו רכיב משרת את שי ואת העובד, בשני מצבים:
+// אותו רכיב בשלושה מצבים:
 //   editable  — שי מוסיף, עורך ומוחק
-//   אחרת      — העובד רק מסמן ✓ תוך כדי שהוא מעמיס
+//   רגיל      — העובד המשובץ מסמן ✓ תוך כדי שהוא מעמיס
+//   readOnly  — צוות הפירוק רואה מה יצא, בלי לגעת בסימונים
 //
 // הסימון עובר דרך set_loading_done ולא דרך update: עובד רשאי
 // לסמן, לא לשנות מה צריך להעמיס.
+//
+// הקוליסות נזרעות בצד השרת (ensure_job_loading), כי על koolisot
+// יש מדיניות "מנהל בלבד" והעובד לא יכול לקרוא את התכנון בעצמו.
+// קיר נשבר לשורה לכל קוליסה — מעמיסים קוליסה-קוליסה.
 // ============================================================
 
 import React, { useEffect, useState } from 'react'
@@ -29,11 +34,34 @@ export const qtyCls = (q) => /^[\d.,/ -]+$/.test(String(q)) ? 'mono t-meta' : 't
 
 const SOURCE = {
   kit:    { label: 'ערכה קבועה', hint: 'עולה על האוטו בכל עבודה' },
-  design: { label: 'מהעיצוב',    hint: 'קוליסות וקירות ששויכו לעבודה' },
+  design: { label: 'מהתכנון',    hint: null },
   manual: { label: 'נוסף ידנית', hint: null },
 }
 
-export default function LoadingList({ jobId, editable = false, koolisot = [], compact = false }) {
+// קיבוץ לתצוגה: הערכה הקבועה, אחר כך כל קיר בנפרד תחת שמו,
+// ובסוף מה שנוסף ידנית. grp הוא שם הקיר שהשורה מרכיבה.
+const groupRows = (rows) => {
+  const out = []
+  const push = (key, title, hint, list) => { if (list.length) out.push({ key, title, hint, list }) }
+
+  push('kit', SOURCE.kit.label, SOURCE.kit.hint, rows.filter(r => r.source === 'kit'))
+
+  const design = rows.filter(r => r.source === 'design')
+  const seen = []
+  for (const r of design) {
+    const g = r.grp || SOURCE.design.label
+    if (!seen.includes(g)) seen.push(g)
+  }
+  for (const g of seen) {
+    const list = design.filter(r => (r.grp || SOURCE.design.label) === g)
+    push('d:' + g, g, `${list.length} ${list.length === 1 ? 'פריט' : 'קוליסות'}`, list)
+  }
+
+  push('manual', SOURCE.manual.label, SOURCE.manual.hint, rows.filter(r => r.source === 'manual'))
+  return out
+}
+
+export default function LoadingList({ jobId, editable = false, readOnly = false, compact = false }) {
   const [rows, setRows] = useState(null)      // null = עוד נטען
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -49,6 +77,7 @@ export default function LoadingList({ jobId, editable = false, koolisot = [], co
   useEffect(() => { if (jobId) load() }, [jobId])
 
   const toggle = async (row) => {
+    if (readOnly) return
     // אופטימי: הסימון חייב להרגיש מיידי כשעומדים ליד האוטו
     setRows(rs => rs.map(r => r.id === row.id ? { ...r, done: !r.done } : r))
     try { await setLoadingDone(row.id, !row.done) }
@@ -69,33 +98,6 @@ export default function LoadingList({ jobId, editable = false, koolisot = [], co
     setBusy(false)
   }
 
-  // אותה ספירה בדיוק כמו בסעיף "תכנון" בכרטיס העבודה. בקיר מסודר
-  // parts הם החלקים עצמם ולא הקוליסות, וספירה נאיבית הייתה אומרת
-  // לעובד מספר אחר ממה שכתוב שורה מעליו.
-  const koolCount = (k) =>
-    k.preview?.kind === 'wall' ? `${(k.parts || []).length} קוליסות`
-    : k.preview?.kind === 'wall-layout' ? `${(k.preview?.wall?.widths || []).length} קוליסות`
-    : `${(k.parts || []).length} חלקים`
-
-  // הקוליסות והקירות ששויכו לעבודה, אלה שעוד לא ברשימה
-  const fromDesign = koolisot.filter(k =>
-    !rows?.some(r => r.source === 'design' && r.label === k.name))
-  const addDesign = async () => {
-    setBusy(true); setErr('')
-    try {
-      const added = []
-      for (const k of fromDesign) {
-        added.push(await addLoadingItem({
-          job_id: jobId, label: k.name,
-          qty: koolCount(k),
-          source: 'design', sort: 200,
-        }))
-      }
-      setRows(rs => [...rs, ...added])
-    } catch (e) { setErr('ההוספה נכשלה: ' + loadingErr(e)) }
-    setBusy(false)
-  }
-
   const remove = async (id) => {
     setRows(rs => rs.filter(r => r.id !== id))
     try { await deleteLoadingItem(id) }
@@ -107,14 +109,12 @@ export default function LoadingList({ jobId, editable = false, koolisot = [], co
   }
 
   const doneCount = rows.filter(r => r.done).length
-  const groups = ['kit', 'design', 'manual']
-    .map(s => [s, rows.filter(r => r.source === s)])
-    .filter(([, list]) => list.length)
+  const groups = groupRows(rows)
 
   return (
     <div>
       <div className="row between" style={{ marginBottom: 8 }}>
-        <div className="t-meta">רשימת העמסה</div>
+        <div className="t-meta">{readOnly ? 'מה שיצא לאירוע' : 'רשימת העמסה'}</div>
         <div className="t-meta mono">
           {doneCount}/{rows.length}
         </div>
@@ -142,21 +142,23 @@ export default function LoadingList({ jobId, editable = false, koolisot = [], co
         </div>
       )}
 
-      {groups.map(([src, list]) => (
-        <div key={src} style={{ marginBottom: 12 }}>
+      {groups.map(g => (
+        <div key={g.key} style={{ marginBottom: 12 }}>
           <div className="t-meta" style={{ marginBottom: 5 }}>
-            {SOURCE[src].label}
-            {SOURCE[src].hint && <span style={{ opacity: .7 }}> · {SOURCE[src].hint}</span>}
+            {g.title}
+            {g.hint && <span style={{ opacity: .7 }}> · {g.hint}</span>}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {list.map(r => (
+            {g.list.map(r => (
               <div key={r.id} className="row gap-2" style={{
                 background: 'var(--card-2)', border: '1px solid var(--line)',
                 borderRadius: 8, padding: compact ? '8px 10px' : 10,
                 opacity: r.done ? .62 : 1,
               }}>
-                <label className="row gap-2 grow" style={{ minWidth: 0, cursor: 'pointer', alignItems: 'center' }}>
-                  <input type="checkbox" checked={!!r.done} onChange={() => toggle(r)}
+                <label className="row gap-2 grow" style={{
+                  minWidth: 0, cursor: readOnly ? 'default' : 'pointer', alignItems: 'center',
+                }}>
+                  <input type="checkbox" checked={!!r.done} disabled={readOnly} onChange={() => toggle(r)}
                     style={{ accentColor: 'var(--gold)', width: 22, height: 22, flex: '0 0 auto' }} />
                   <span className="grow truncate" style={{
                     fontWeight: 600, fontSize: 14,
@@ -174,14 +176,14 @@ export default function LoadingList({ jobId, editable = false, koolisot = [], co
         </div>
       ))}
 
+      {readOnly && rows.length > 0 && (
+        <div className="t-meta">
+          הסימונים הם של צוות ההתקנה. בפירוק הרשימה לבדיקה בלבד, כדי שלא יימחק מה שהם סימנו.
+        </div>
+      )}
+
       {editable && (
         <>
-          {fromDesign.length > 0 && (
-            <button className="btn btn-sm" style={{ width: '100%', marginBottom: 8 }}
-              disabled={busy} onClick={addDesign}>
-              ＋ הוסף {fromDesign.length} מהעיצוב
-            </button>
-          )}
           <div className="row gap-2">
             <input className="field" placeholder="תרנים · אלמניה · חולץ בזנטים"
               style={{ flex: 1, minWidth: 0, height: 38 }}
@@ -195,7 +197,7 @@ export default function LoadingList({ jobId, editable = false, koolisot = [], co
               disabled={busy || !label.trim()} onClick={add}>הוסף</button>
           </div>
           <div className="t-meta" style={{ marginTop: 6 }}>
-            הערכה הקבועה נערכת ב<b>הגדרות ← ערכת העמסה</b>, ומופיעה בכל עבודה.
+            הקוליסות נכנסות לבד מהתכנון. הערכה הקבועה נערכת ב<b>הגדרות ← ערכת העמסה</b>.
           </div>
         </>
       )}

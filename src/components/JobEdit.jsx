@@ -1,21 +1,74 @@
 import React, { useState } from 'react'
 import { STATUSES, CATEGORIES, ils } from '../data.js'
 import { createJob, updateJob, deleteJob } from '../db.js'
+import { generateKulisa, defaultFrameMaterial, LIMITS_PREFERRED, BRACE_DEFAULT } from '../designer/kulisa.js'
 
 const blank = () => ({
   title: '', client: '', contact: '', eventDate: '', eventTime: '', status: 'inquiry',
+  teardownDate: '', teardownTime: '',
   venue: '', address: '', clientId: null,
   items: [], team: [], note: '',
 })
 
-export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = [], clients = [] }) {
+// המידות השכיחות. הרוחבים הם אותם רוחבים שהמעצב כבר עובד איתם
+// (LIMITS_PREFERRED), כדי שלא ייווצר כאן תקן שני. הגובה הנפוץ 240.
+const KOOL_HEIGHT = 240
+const KOOL_PRESETS = LIMITS_PREFERRED.map(w => ({ w, h: KOOL_HEIGHT }))
+
+export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = [], clients = [], onKoolisa }) {
   const editing = Boolean(job && job.id)
   const [f, setF] = useState(() => job ? { ...blank(), ...job } : blank())
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
+  // קוליסות שנבחרו כאן ועוד לא נוצרו — נוצרות אחרי שלעבודה יש id
+  const [kool, setKool] = useState([])
+  const [custom, setCustom] = useState(null)   // { w, h } כשפותחים "מידה אחרת"
+  // תאריך הפירוק נגרר אחרי תאריך האירוע עד שנוגעים בו בעצמנו
+  const [tdTouched, setTdTouched] = useState(() => !!(job && job.teardownDate))
+  // id של עבודה שכבר נוצרה בלחיצה קודמת. בלעדיו, שמירה חוזרת אחרי
+  // כשל בקוליסות הייתה יוצרת עבודה שנייה.
+  const [newId, setNewId] = useState(null)
 
   const set = (k, v) => setF(s => ({ ...s, [k]: v }))
+  // "הדיפולט יהיה אותו יום": בחירת תאריך אירוע ממלאת גם את הפירוק,
+  // אבל לא דורסת תאריך שכבר נקבע ביד.
+  const setEventDate = (v) => setF(s => ({
+    ...s, eventDate: v, teardownDate: tdTouched ? s.teardownDate : v,
+  }))
+  const setTeardownDate = (v) => { setTdTouched(true); set('teardownDate', v) }
+
+  const frameMat = defaultFrameMaterial(inventory)
+  const addKool = (w, h, qty = 1) => setKool(ks => [...ks, { w, h, qty, key: Math.random().toString(36).slice(2) }])
+  const setKoolQty = (key, v) =>
+    setKool(ks => ks.map(k => k.key === key ? { ...k, qty: Math.min(50, Math.max(1, Math.round(Number(v) || 1))) } : k))
+  const delKool = (key) => setKool(ks => ks.filter(k => k.key !== key))
+
+  // יצירת הקוליסות אחרי שהעבודה נשמרה. אותו מחולל של האולפן בדיוק —
+  // רשימת החיתוך שתצא מכאן זהה לזו שהייתה יוצאת משם.
+  //
+  // שורה שנוצרה יורדת מהרשימה מיד. אם שורה מאוחרת יותר נכשלת, לחיצה
+  // שנייה על "שמירה" לא תיצור שוב את מה שכבר נוצר.
+  const createKoolisot = async (jobId) => {
+    if (!kool.length || !onKoolisa) return
+    for (const k of [...kool]) {
+      const gen = generateKulisa({ width: k.w, height: k.h, material: frameMat, braces: BRACE_DEFAULT })
+      if (gen.errors.length) throw new Error(`קוליסה ${k.h}×${k.w}: ${gen.errors[0]}`)
+      for (let i = 0; i < k.qty; i++) {
+        const nm = `קוליסה ${k.h}×${k.w}` + (k.qty > 1 ? ` #${i + 1}` : '')
+        // onKoolisaSave בולע שגיאה ומחזיר null. בלי הבדיקה הזו
+        // הפאנל היה נסגר כאילו הכל נוצר, והקוליסות לא היו שם.
+        const saved = await onKoolisa({
+          name: nm,
+          preview: { גובה: k.h, רוחב: k.w, עומק: 40, עובי: 2, marks: [] },
+          parts: gen.parts,
+          jobId,
+        })
+        if (!saved) throw new Error(`"${nm}" לא נשמרה — ייתכן ש-koolisot.sql לא הורץ`)
+      }
+      setKool(ks => ks.filter(x => x.key !== k.key))
+    }
+  }
   const total = f.items.reduce((s, it) => s + (Number(it.price) || 0), 0)
 
   const addItem = () => set('items', [...f.items, { cat: 'backdrop', name: '', qty: 1, price: 0 }])
@@ -38,11 +91,23 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
         team: Array.isArray(f.team) ? f.team : String(f.team).split(',').map(s => s.trim()).filter(Boolean),
         eventDate: f.eventDate || null,
         eventTime: f.eventTime || null,     // עמודת time לא מקבלת מחרוזת ריקה
+        teardownDate: f.teardownDate || null,
+        teardownTime: f.teardownTime || null,
         venue: (f.venue || '').trim() || null,
         address: (f.address || '').trim() || null,
         clientId: f.clientId || null,
       }
-      const saved = editing ? await updateJob(job.id, payload) : await createJob(payload)
+      const existingId = (editing && job.id) || newId
+      const saved = existingId ? await updateJob(existingId, payload) : await createJob(payload)
+      setNewId(saved.id)
+      // הקוליסות נוצרות רק אחרי שלעבודה יש id. אם זה נכשל, העבודה
+      // כבר נשמרה — אומרים את זה במקום לסגור ולהשאיר אותו לגלות לבד.
+      try { await createKoolisot(saved.id) }
+      catch (ke) {
+        setErr('העבודה נשמרה, אבל הקוליסות לא נוצרו: ' + (ke.message || ke))
+        setBusy(false)
+        return
+      }
       onSaved(saved)
     } catch (e) {
       setErr('שמירה נכשלה: ' + (e.message || e))
@@ -86,9 +151,18 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
             <div className="grow">{label('טלפון')}<input className="field" dir="ltr" style={{ textAlign: 'start' }} value={f.contact} onChange={e => set('contact', e.target.value)} placeholder="050-0000000" /></div>
           </div>
           <div className="row gap-3">
-            <div className="grow">{label('תאריך אירוע')}<input className="field" type="date" dir="ltr" value={f.eventDate || ''} onChange={e => set('eventDate', e.target.value)} /></div>
+            <div className="grow">{label('תאריך אירוע')}<input className="field" type="date" dir="ltr" value={f.eventDate || ''} onChange={e => setEventDate(e.target.value)} /></div>
             <div style={{ width: 118 }}>{label('שעה')}<input className="field" type="time" dir="ltr" value={f.eventTime || ''} onChange={e => set('eventTime', e.target.value)} /></div>
           </div>
+          <div className="row gap-3">
+            <div className="grow">{label('תאריך פירוק')}<input className="field" type="date" dir="ltr" value={f.teardownDate || ''} onChange={e => setTeardownDate(e.target.value)} /></div>
+            <div style={{ width: 118 }}>{label('שעה')}<input className="field" type="time" dir="ltr" value={f.teardownTime || ''} onChange={e => set('teardownTime', e.target.value)} /></div>
+          </div>
+          {f.teardownDate && f.eventDate && f.teardownDate !== f.eventDate && (
+            <div className="t-meta" style={{ marginTop: -8 }}>
+              הפירוק ביום אחר מהאירוע.
+            </div>
+          )}
           <div className="row gap-3">
             <div className="grow">{label('סטטוס')}
               <select className="field" value={f.status} onChange={e => set('status', e.target.value)}>
@@ -104,6 +178,61 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
           </div>
           <div>{label('מקום האירוע')}<input className="field" value={f.venue || ''} onChange={e => set('venue', e.target.value)} placeholder="אולמי הדר" /></div>
           <div>{label('כתובת מלאה — לניווט')}<input className="field" value={f.address || ''} onChange={e => set('address', e.target.value)} placeholder="הרצל 12, ראשון לציון" /></div>
+
+          {/* קוליסות מקושרות — נוצרות עם העבודה, ומשם נכנסות גם
+              לתכנון וגם לרשימת ההעמסה. אותו מחולל של האולפן. */}
+          <div>
+            {label('קוליסות מקושרות')}
+            <select className="field" value="" onChange={e => {
+              const v = e.target.value
+              if (!v) return
+              if (v === 'custom') { setCustom({ w: 120, h: KOOL_HEIGHT }); return }
+              const [w, h] = v.split('x').map(Number)
+              addKool(w, h)
+            }}>
+              <option value="">＋ הוסף קוליסה…</option>
+              {KOOL_PRESETS.map(p => (
+                <option key={p.w} value={`${p.w}x${p.h}`}>רוחב {p.w} · גובה {p.h}</option>
+              ))}
+              <option value="custom">מידה אחרת…</option>
+            </select>
+
+            {custom && (
+              <div className="row gap-2" style={{ marginTop: 8 }}>
+                <div className="grow">{label('רוחב')}<input className="field" style={{ height: 38 }} type="number" dir="ltr" min="1"
+                  value={custom.w} onChange={e => setCustom(c => ({ ...c, w: e.target.value }))} /></div>
+                <div className="grow">{label('גובה')}<input className="field" style={{ height: 38 }} type="number" dir="ltr" min="1"
+                  value={custom.h} onChange={e => setCustom(c => ({ ...c, h: e.target.value }))} /></div>
+                <button className="btn btn-solid btn-sm" type="button" style={{ alignSelf: 'flex-end', height: 38 }}
+                  onClick={() => { addKool(Math.round(Number(custom.w)), Math.round(Number(custom.h))); setCustom(null) }}>הוסף</button>
+                <button className="btn btn-ghost btn-sm" type="button" style={{ alignSelf: 'flex-end', height: 38 }}
+                  onClick={() => setCustom(null)} aria-label="בטל">✕</button>
+              </div>
+            )}
+
+            {kool.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                {kool.map(k => (
+                  <div key={k.key} className="row gap-2" style={{
+                    background: 'var(--card-2)', border: '1px solid var(--line)', borderRadius: 8, padding: 8,
+                  }}>
+                    <span className="grow truncate" style={{ fontWeight: 600, fontSize: 14 }}>
+                      קוליסה <span className="mono">{k.h}×{k.w}</span>
+                    </span>
+                    <input className="field mono" style={{ height: 34, width: 62 }} type="number" dir="ltr" min="1" max="50"
+                      value={k.qty} onChange={e => setKoolQty(k.key, e.target.value)} aria-label="כמות" />
+                    <button className="btn btn-ghost btn-sm" type="button" onClick={() => delKool(k.key)} aria-label="הסר">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="t-meta" style={{ marginTop: 6 }}>
+              {frameMat
+                ? <>נוצרות בשמירה, עם רשימת חיתוך מלאה לפי <b>{frameMat.name}</b>. אפשר לפתוח אותן אחר כך באולפן.</>
+                : <span style={{ color: 'var(--danger)' }}>אין במלאי חומר מסגרת מתאים — הוסף לטה במלאי לפני שמקשרים קוליסות.</span>}
+            </div>
+          </div>
 
           {/* פריטים */}
           <div>

@@ -473,6 +473,7 @@ export default function App() {
           onDeleted={onDeleted}
           inventory={inventory}
           clients={clients}
+          onKoolisa={onKoolisaSave}
         />
       )}
 
