@@ -33,10 +33,18 @@ export default function Login() {
     const raw = user.trim()
     // שי ואימייל מלא — ישירות. כל השאר: קודם כשם עובד, ואם אין כזה — כקוד.
     const direct = raw.includes('@') || ALIASES[raw]
-    const email = (!direct && await loginEmailFor(raw)) || toEmail(raw)
+    const found = direct ? null : await loginEmailFor(raw)
+    const email = found || toEmail(raw)
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass })
     setBusy(false)
-    if (error) setErr('שם או סיסמה שגויים')
+    // המסך כבר יודע להבדיל: אם השם תורגם לחשבון, הכישלון הוא בסיסמה.
+    // הודעה אחת לשני המקרים השאירה את העובד בלי דרך לדעת מה לתקן,
+    // ואת שי בלי דרך לעזור לו מרחוק.
+    if (error) {
+      setErr(found || direct
+        ? 'הסיסמה שגויה.'
+        : 'לא נמצא עובד בשם הזה. בדוק את השם שבכרטיס, או היכנס עם קוד ההצטרפות.')
+    }
   }
 
   const join = async (e) => {
