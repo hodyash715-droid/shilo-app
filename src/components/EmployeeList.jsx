@@ -44,7 +44,7 @@ export default function EmployeeList({ employees, selfUserId = null, onSaved, on
       )}
 
       {edit !== undefined && (
-        <EmployeeEdit emp={edit} selfUserId={selfUserId}
+        <EmployeeEdit emp={edit} selfUserId={selfUserId} others={employees}
           onClose={() => setEdit(undefined)}
           onSaved={(s) => { onSaved(s); setEdit(undefined) }}
           onDeleted={(id) => { onDeleted(id); setEdit(undefined) }} />

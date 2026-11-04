@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { createEmployee, updateEmployee, deleteEmployee } from '../db.js'
 import { blankEmp as blank, toForm, rateOf } from '../empform.js'
+import { loginHint } from '../loginname.js'
 
 const ROLES = ['מתקין', 'נהג', 'אחראי אתר', 'כללי']
 
@@ -14,7 +15,7 @@ const genCode = () => {
 }
 const CODE_DAYS = 14
 
-export default function EmployeeEdit({ emp, selfUserId = null, onClose, onSaved, onDeleted }) {
+export default function EmployeeEdit({ emp, selfUserId = null, others = [], onClose, onSaved, onDeleted }) {
   const editing = Boolean(emp && emp.id)
   const [f, setF] = useState(() => (emp ? toForm(emp) : blank()))
   const [busy, setBusy] = useState(false)
@@ -108,11 +109,23 @@ export default function EmployeeEdit({ emp, selfUserId = null, onClose, onSaved,
               <div className="card" style={{ padding: 14, background: 'var(--card-2)' }}>
                 <div className="t-meta" style={{ marginBottom: 4 }}>קוד הצטרפות לאפליקציה</div>
 
-                {f.user_id ? (
-                  <div className="muted" style={{ fontSize: 13, textAlign: 'center', padding: '8px 0' }}>
-                    ✓ העובד כבר מחובר לאפליקציה
-                  </div>
-                ) : f.join_code && !expired ? (
+                {f.user_id ? (() => {
+                  // לפי השם שבשדה עכשיו — שינוי שם משנה גם את שם הכניסה
+                  const h = f.name.trim() ? loginHint({ ...emp, name: f.name }, others) : null
+                  return (
+                    <div style={{ fontSize: 13, textAlign: 'center', padding: '6px 0', lineHeight: 1.7 }}>
+                      <div className="muted">✓ העובד כבר מחובר לאפליקציה</div>
+                      {h && !h.clash && (
+                        <div>נכנס עם השם <b>{h.full}</b>{h.first && <> או רק <b>{h.first}</b></>}, והסיסמה שבחר</div>
+                      )}
+                      {h?.clash && (
+                        <div style={{ color: '#E5735B', fontWeight: 600 }}>
+                          יש עוד עובד בשם "{h.full}" — שנה את אחד השמות (למשל הוסף אות משם המשפחה), אחרת שניהם לא יוכלו להיכנס בשם
+                        </div>
+                      )}
+                    </div>
+                  )
+                })() : f.join_code && !expired ? (
                   <>
                     <button type="button" className="mono" title="העתק"
                       onClick={() => { try { navigator.clipboard.writeText(f.join_code); setCopied(true); setTimeout(() => setCopied(false), 1600) } catch { } }}

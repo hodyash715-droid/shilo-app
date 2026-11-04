@@ -141,6 +141,14 @@ export async function findEmployeeByCode(code) {
 
 // תפיסת קוד הצטרפות. אחרי הידוק ההרשאות זה עובר דרך פונקציה מאובטחת בשרת;
 // לפני כן — נופל חזרה לשיטה הישירה. מחזיר את מזהה העובד או null.
+// שם עובד → כתובת החשבון שלו (ראה supabase/login-name.sql).
+// null = אין עובד מחובר יחיד בשם הזה, או שהקובץ עוד לא הורץ.
+export async function loginEmailFor(name) {
+  const { data, error } = await supabase.rpc('login_email', { p_name: name })
+  if (error) return null
+  return data || null
+}
+
 export async function claimEmployeeCode(code, userId) {
   const c = String(code).toUpperCase()
   const { data, error } = await supabase.rpc('claim_employee_code', { p_code: c })

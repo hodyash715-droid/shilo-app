@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { supabase } from '../supabase.js'
-import { claimEmployeeCode } from '../db.js'
+import { claimEmployeeCode, loginEmailFor } from '../db.js'
 
-// שם משתמש → אימייל. עובדים משתמשים בקוד ההצטרפות שלהם כשם משתמש.
+// שם משתמש → אימייל. עובדים נכנסים עם השם שבכרטיס שלהם (login_email
+// במסד מתרגם אותו לחשבון), ועם קוד ההצטרפות כגיבוי — כך נוצר החשבון.
 const ALIASES = { 'שי': 'shai' }
 const toEmail = (u) => {
   const raw = u.trim()
@@ -29,9 +30,13 @@ export default function Login() {
   const login = async (e) => {
     e.preventDefault()
     setErr(''); setBusy(true)
-    const { error } = await supabase.auth.signInWithPassword({ email: toEmail(user), password: pass })
+    const raw = user.trim()
+    // שי ואימייל מלא — ישירות. כל השאר: קודם כשם עובד, ואם אין כזה — כקוד.
+    const direct = raw.includes('@') || ALIASES[raw]
+    const email = (!direct && await loginEmailFor(raw)) || toEmail(raw)
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pass })
     setBusy(false)
-    if (error) setErr('שם משתמש או סיסמה שגויים')
+    if (error) setErr('שם או סיסמה שגויים')
   }
 
   const join = async (e) => {
@@ -48,7 +53,7 @@ export default function Login() {
       if (upErr) {
         setBusy(false)
         setErr(/already|exists|registered/i.test(upErr.message)
-          ? 'הקוד הזה כבר בשימוש. התחבר עם הקוד והסיסמה שלך.'
+          ? 'הקוד הזה כבר בשימוש. התחבר עם השם והסיסמה שלך.'
           : 'ההרשמה נכשלה: ' + upErr.message)
         return
       }
@@ -56,7 +61,7 @@ export default function Login() {
       let uid = up?.user?.id
       if (!up?.session) {
         const { data: si, error: siErr } = await supabase.auth.signInWithPassword({ email, password: pass })
-        if (siErr) { setBusy(false); setErr('ההרשמה הצליחה אך הכניסה נכשלה. נסה להתחבר עם הקוד והסיסמה.'); return }
+        if (siErr) { setBusy(false); setErr('ההרשמה הצליחה אך הכניסה נכשלה. נסה להתחבר עם השם והסיסמה.'); return }
         uid = si?.user?.id
       }
       // מקשרים את החשבון לכרטיס העובד
@@ -90,9 +95,9 @@ export default function Login() {
             <div className="muted" style={{ fontSize: 15, marginBottom: 24 }}>מה על הלוח היום?</div>
             <form onSubmit={login} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label className="t-meta" style={{ display: 'block', marginBottom: 6 }}>שם משתמש</label>
+                <label className="t-meta" style={{ display: 'block', marginBottom: 6 }}>שם</label>
                 <input type="text" required value={user} onChange={e => setUser(e.target.value)}
-                  autoComplete="username" placeholder="שי" style={darkField} />
+                  autoComplete="username" placeholder="השם שלך" style={darkField} />
               </div>
               <div>
                 <label className="t-meta" style={{ display: 'block', marginBottom: 6 }}>סיסמה</label>
@@ -142,7 +147,7 @@ export default function Login() {
               → חזרה לכניסה
             </button>
             <div className="t-meta" style={{ marginTop: 16, textAlign: 'center', lineHeight: 1.7 }}>
-              אחרי ההצטרפות תיכנס עם <b>הקוד</b> כשם משתמש.
+              אחרי ההצטרפות תיכנס עם <b>השם שלך</b> והסיסמה שבחרת.
             </div>
           </>
         )}
