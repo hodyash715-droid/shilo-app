@@ -7,6 +7,7 @@ import {
   fetchKoolisot, saveKoolisa, deleteKoolisa, attachKoolisa,
   fetchNotifications, markNotifRead, markAllNotifsRead,
 } from './db.js'
+import { settle, mergeLoad } from './loadmerge.js'
 import Header from './components/Header.jsx'
 import Home from './components/Home.jsx'
 import Calendar from './components/Calendar.jsx'
@@ -56,6 +57,21 @@ function NotLinked({ email, onSignOut }) {
           בקש משי קוד הצטרפות מעודכן.
         </div>
         <button className="btn" style={{ marginTop: 20 }} onClick={onSignOut}>יציאה</button>
+      </div>
+    </div>
+  )
+}
+
+function Offline({ text, busy, onRetry }) {
+  return (
+    <div style={{ minHeight: '100%', display: 'grid', placeItems: 'center', padding: 24, textAlign: 'center' }}>
+      <div style={{ maxWidth: 380 }}>
+        <div className="brand-mark" style={{ margin: '0 auto 16px' }}>ש</div>
+        <div className="t-h2" style={{ marginBottom: 8 }}>אין חיבור</div>
+        <div className="muted" style={{ lineHeight: 1.7 }}>{text}</div>
+        <button className="btn" style={{ marginTop: 20 }} disabled={busy} onClick={onRetry}>
+          {busy ? 'מנסה…' : 'נסה שוב'}
+        </button>
       </div>
     </div>
   )
@@ -127,6 +143,9 @@ export default function App() {
   const [dataReady, setDataReady] = useState(false)
   const [loadErr, setLoadErr] = useState('')
   const [view, setView] = useState('home')
+  const [designSeen, setDesignSeen] = useState(false)
+  const designOpened = designSeen || view === 'design'
+  useEffect(() => { if (view === 'design') setDesignSeen(true) }, [view])
   const [openId, setOpenId] = useState(null)
   const [editTarget, setEditTarget] = useState(undefined) // undefined=closed, null=new, job=edit
   const [route, setRoute] = useState(() => window.location.hash || '')
@@ -153,26 +172,34 @@ export default function App() {
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  // טעינת עבודות כשמחוברים. quiet = רענון ברקע, בלי שלד טעינה ובלי לאפס את המסך
+  // טעינת עבודות כשמחוברים. quiet = רענון ברקע, בלי שלד טעינה ובלי לאפס את המסך.
+  // בקשה שנכשלה (אין קליטה) משאירה את מה שכבר על המסך — ראה loadmerge.js
   const load = async (quiet = false) => {
     if (!quiet) setLoading(true)
-    setLoadErr('')
     try {
-      const [j, mj, e, sh, inv, av] = await Promise.all([
-        fetchJobs().catch(() => []),          // עובד חסום מהעבודות — יקבל []
-        fetchMyJobTitles().catch(() => []),   // ולכן מקבל רק שמות האירועים שלו
-        fetchEmployees().catch(() => []),
-        fetchShifts().catch(() => []),
-        fetchInventory().catch(() => []),
-        fetchAvailability().catch(() => []),
+      const [jobs, myJobs, employees, shifts, inventory, availability, clients, koolisot] = await Promise.all([
+        settle(fetchJobs()),          // עובד חסום מהעבודות
+        settle(fetchMyJobTitles()),   // ולכן מקבל רק שמות האירועים שלו
+        settle(fetchEmployees()),
+        settle(fetchShifts()),
+        settle(fetchInventory()),
+        settle(fetchAvailability()),
+        settle(fetchClients()),
+        settle(fetchKoolisot()),      // הטבלה אולי עוד לא נוצרה
       ])
-      const [cl, kl] = await Promise.all([
-        fetchClients().catch(() => []),
-        fetchKoolisot().catch(() => []),   // הטבלה אולי עוד לא נוצרה
-      ])
-      setJobs(j.length ? j : mj)
-      setEmployees(e); setShifts(sh); setInventory(inv); setAvailabilityState(av)
-      setClients(cl); setKoolisot(kl)
+      const { updates: u, failed } = mergeLoad({ jobs, myJobs, employees, shifts, inventory, availability, clients, koolisot })
+      if (u.jobs) setJobs(u.jobs)
+      if (u.employees) setEmployees(u.employees)
+      if (u.shifts) setShifts(u.shifts)
+      if (u.inventory) setInventory(u.inventory)
+      if (u.availability) setAvailabilityState(u.availability)
+      if (u.clients) setClients(u.clients)
+      if (u.koolisot) setKoolisot(u.koolisot)
+      // אין חיבור בכלל: גם העובדים וגם העבודות לא הגיעו.
+      // ברקע — שותקים ומנסים שוב בעוד דקה. בטעינה רגילה — מודיעים.
+      const offline = failed.includes('employees') && failed.includes('jobs')
+      if (!offline) setLoadErr('')
+      else if (!quiet) setLoadErr('אין חיבור לשרת. בדוק את הקליטה ונסה שוב.')
     }
     catch (e) { if (!quiet) setLoadErr(e.message || String(e)) }
     finally { if (!quiet) setLoading(false); setDataReady(true) }
@@ -190,18 +217,22 @@ export default function App() {
       load(true)
     }
     const t = setInterval(refresh, 60000)
+    // הקליטה חזרה — מרעננים מיד, בלי לחכות לדקה הבאה
+    const online = () => { last = 0; refresh() }
     window.addEventListener('focus', refresh)
+    window.addEventListener('online', online)
     document.addEventListener('visibilitychange', refresh)
     return () => {
       clearInterval(t)
       window.removeEventListener('focus', refresh)
+      window.removeEventListener('online', online)
       document.removeEventListener('visibilitychange', refresh)
     }
   }, [session, dataReady])
 
   // קישור עצמי: עובד שנכנס עם הקוד שלו ועדיין לא מקושר — נקשר אוטומטית
   useEffect(() => {
-    if (!session || !dataReady) return
+    if (!session || !dataReady || loadErr) return
     const email = (session.user?.email || '').toLowerCase()
     if (MANAGERS.includes(email)) return
     if (employees.some(e => e.user_id === session.user?.id)) return
@@ -213,7 +244,7 @@ export default function App() {
       } catch (e) { /* אין קוד תואם — יוצג מסך "לא מקושר" */ }
     })()
     return () => { cancelled = true }
-  }, [session, dataReady, employees])
+  }, [session, dataReady, employees, loadErr])
 
   // ---- מרכז התראות ----
   const isManagerNow = managerOf(session, employees)
@@ -399,6 +430,8 @@ export default function App() {
   const isManager = managerOf(session, employees)
 
   if (!isManager) {
+    // בלי חיבור אי אפשר לדעת אם החשבון מקושר — לא מבהילים את העובד
+    if (!me && loadErr) return <><Offline text={loadErr} busy={loading} onRetry={() => load()} /><VersionBadge /></>
     if (!me) return <><NotLinked email={email} onSignOut={() => supabase.auth.signOut()} /><VersionBadge /></>
     return (
       <>
@@ -451,9 +484,6 @@ export default function App() {
               onItemReturn={(jobId, i) => markReturned(jobId, i)}
               onAllReturned={(jobId) => markReturned(jobId, 'all')}
               onInvSaved={onInvSaved} onInvDeleted={onInvDeleted} />}
-            {view === 'design' && <Designer inventory={inventory} koolisot={koolisot}
-              jobs={jobs} onSave={onKoolisaSave} onDelete={onKoolisaDelete}
-              target={designTarget} onTargetUsed={() => setDesignTarget(null)} />}
             {view === 'settings' && <Settings name={displayName(session, employees)}
               selfUserId={session.user?.id}
               email={session.user?.email} onSignOut={() => supabase.auth.signOut()}
@@ -461,6 +491,17 @@ export default function App() {
               clients={clients} onClientSaved={onClientSaved} onClientDeleted={onClientDeleted}
               jobs={jobs} />}
           </div>}
+
+      {/* המתכנן נשאר חי גם כשעוברים ללשונית אחרת (או כשהמסך נטען מחדש),
+          אחרת עיצוב שעוד לא נשמר נמחק בשקט. נבנה רק בכניסה הראשונה. */}
+      {designOpened && (
+        <div style={{ display: view === 'design' && !loading ? 'block' : 'none' }}>
+          <Designer inventory={inventory} koolisot={koolisot}
+            jobs={jobs} onSave={onKoolisaSave} onDelete={onKoolisaDelete}
+            target={designTarget} onTargetUsed={() => setDesignTarget(null)}
+            active={view === 'design' && !loading} />
+        </div>
+      )}
 
       {openJob && (
         <JobDetail

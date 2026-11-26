@@ -28,3 +28,22 @@ export const rateOf = (v) => {
   const n = Number(v)
   return Number.isFinite(n) ? n : null
 }
+
+// ---------- איפוס סיסמה ----------
+// אותו כלל כמו בהצטרפות וכמו ב-supabase/reset-password.sql.
+// מחזיר הודעת שגיאה, או '' כשהסיסמה בסדר.
+export const passwordProblem = (p) => {
+  const s = String(p ?? '')
+  if (!s.trim()) return 'צריך להקליד סיסמה חדשה'
+  if (s.length < 6) return 'הסיסמה חייבת להיות לפחות 6 תווים'
+  return ''
+}
+
+// שגיאה מהשרת → משפט שאפשר לפעול לפיו
+export const resetErrorText = (e) => {
+  const m = String(e?.message || e || '')
+  if (/manager_set_password|function .* does not exist|PGRST202/i.test(m))
+    return 'האיפוס עוד לא הופעל. צריך להריץ פעם אחת את supabase/reset-password.sql ב-Supabase.'
+  if (/fetch|network|Failed to/i.test(m)) return 'אין חיבור לשרת. נסה שוב.'
+  return m || 'האיפוס נכשל'
+}

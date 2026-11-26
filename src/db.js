@@ -174,6 +174,12 @@ export async function fetchMyJobTitles() {
   }))
 }
 
+// איפוס סיסמה לעובד — רק מנהל (ראה supabase/reset-password.sql)
+export async function setEmployeePassword(empId, password) {
+  const { error } = await supabase.rpc('manager_set_password', { p_employee: empId, p_password: password })
+  if (error) throw error
+}
+
 export async function linkEmployeeToUser(empId, userId) {
   const { data, error } = await supabase
     .from('employees').update({ user_id: userId }).eq('id', empId).select().single()

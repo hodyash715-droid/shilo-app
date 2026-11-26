@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { toForm, rateOf, blankEmp } from '../src/empform.js'
+import { toForm, rateOf, blankEmp, passwordProblem, resetErrorText } from '../src/empform.js'
 
 // עובד שנשמר בלי שכר, בלי תפקיד ובלי טלפון — מה שקורה בפועל במסד
 const bare = { id: 'e1', name: 'שגב', role: null, phone: null, rate: null, active: true }
@@ -55,4 +55,22 @@ test('עובד חדש מתחיל ריק ולא מנהל', () => {
   assert.equal(b.rate, '')
   assert.equal(b.is_manager, false)
   assert.equal(b.active, true)
+})
+
+// ---------- איפוס סיסמה (26.11.2026) ----------
+
+test('איפוס סיסמה: ריקה או קצרה נדחית, 6 תווים עוברת', () => {
+  assert.ok(passwordProblem(''))
+  assert.ok(passwordProblem('   '))
+  assert.ok(passwordProblem('12345'))
+  assert.equal(passwordProblem('123456'), '')
+})
+
+test('איפוס סיסמה: הקובץ לא הורץ — אומרים מה להריץ', () => {
+  const t = resetErrorText({ message: 'Could not find the function public.manager_set_password' })
+  assert.match(t, /reset-password\.sql/)
+})
+
+test('איפוס סיסמה: הודעה מהשרת עוברת כמו שהיא', () => {
+  assert.equal(resetErrorText({ message: 'אי אפשר לאפס סיסמה של מנהל אחר' }), 'אי אפשר לאפס סיסמה של מנהל אחר')
 })
