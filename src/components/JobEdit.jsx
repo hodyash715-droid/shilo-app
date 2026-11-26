@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { STATUSES, CATEGORIES, ils } from '../data.js'
 import { createJob, updateJob, deleteJob } from '../db.js'
+import { isDirty } from '../formdirty.js'
 import { generateKulisa, defaultFrameMaterial, LIMITS_PREFERRED, BRACE_DEFAULT } from '../designer/kulisa.js'
 import { materialsFor } from '../designer/materials.js'
 
@@ -19,6 +20,7 @@ const KOOL_PRESETS = LIMITS_PREFERRED.map(w => ({ w, h: KOOL_HEIGHT }))
 export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = [], clients = [], koolisot = [], onKoolisa, onAttach }) {
   const editing = Boolean(job && job.id)
   const [f, setF] = useState(() => job ? { ...blank(), ...job } : blank())
+  const [initial] = useState(f)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
@@ -151,11 +153,18 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
     catch (e) { setErr('מחיקה נכשלה: ' + (e.message || e)); setBusy(false) }
   }
 
+  // סגירה בלי שמירה: שואלים רק אם יש מה לאבד
+  const dirty = isDirty(initial, f) || kool.length > 0 || pull.length > 0
+  const close = () => {
+    if (dirty && !window.confirm('יש שינויים שלא נשמרו. לסגור בלי לשמור?')) return
+    onClose()
+  }
+
   const label = t => <div className="t-meta" style={{ marginBottom: 6 }}>{t}</div>
   const teamStr = Array.isArray(f.team) ? f.team.join(', ') : f.team
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={close} style={{
       position: 'fixed', inset: 0, zIndex: 45,
       background: 'rgba(0,0,0,.55)', display: 'flex', justifyContent: 'flex-start',
     }}>
@@ -169,7 +178,7 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
             <div className="t-h2">{editing ? 'עריכת עבודה' : 'עבודה חדשה'}</div>
             {f.orderNo && <span className="chip mono">#{f.orderNo}</span>}
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="סגור">✕</button>
+          <button className="btn btn-ghost btn-sm" onClick={close} aria-label="סגור">✕</button>
         </div>
 
         <datalist id="invnames">{inventory.map(iv => <option key={iv.id} value={iv.name} />)}</datalist>
@@ -346,7 +355,7 @@ export default function JobEdit({ job, onClose, onSaved, onDeleted, inventory = 
             : <button className="btn btn-sm" onClick={() => setConfirmDel(true)} disabled={busy} type="button"
                 style={{ color: '#E5735B' }}>מחיקה</button>)}
           <div className="grow" />
-          <button className="btn" onClick={onClose} type="button">ביטול</button>
+          <button className="btn" onClick={close} type="button">ביטול</button>
           <button className="btn btn-solid" onClick={save} disabled={busy} type="button">{busy ? 'שומר…' : 'שמירה'}</button>
         </div>
       </div>

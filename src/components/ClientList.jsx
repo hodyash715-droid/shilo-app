@@ -16,12 +16,28 @@ export default function ClientList({ clients = [], onSaved, onDeleted, jobs = []
   const [copied, setCopied] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
   const [confirmRot, setConfirmRot] = useState(null)
+  // שגיאה בשורה של מפיקה מסוימת. קודם מחיקה או החלפת קישור שנכשלו
+  // לא הראו כלום — ההודעה ישבה בטופס ההוספה, שבדרך כלל סגור.
+  const [rowErr, setRowErr] = useState(null)      // { id, text }
+  const [delBusy, setDelBusy] = useState(null)
+
+  const remove = async (c) => {
+    setRowErr(null); setDelBusy(c.id)
+    try {
+      await deleteClientRec(c.id)
+      setConfirmDel(null)
+      onDeleted(c.id)
+    } catch (e) {
+      setRowErr({ id: c.id, text: 'המחיקה נכשלה. בדוק את החיבור ונסה שוב.' })
+    }
+    setDelBusy(null)
+  }
 
   // אם קישור דלף או הגיע לאדם הלא נכון — מחליפים אותו
   const rotate = async (c) => {
-    setConfirmRot(null)
+    setConfirmRot(null); setRowErr(null)
     try { onSaved(await rotateClientToken(c.id, rndToken())) }
-    catch (e) { setErr('החלפת הקישור נכשלה') }
+    catch (e) { setRowErr({ id: c.id, text: 'החלפת הקישור נכשלה. הקישור הישן עדיין עובד.' }) }
   }
 
   // מה קורה עם כל מפיקה — כמה שלחה, מתי, וכמה פתוחות
@@ -123,8 +139,8 @@ export default function ClientList({ clients = [], onSaved, onDeleted, jobs = []
                     <>
                       <button className="btn btn-sm" onClick={() => setConfirmDel(null)}>ביטול</button>
                       <button className="btn btn-sm" style={{ color: '#fff', background: '#B23A2A', borderColor: '#B23A2A' }}
-                        onClick={() => deleteClientRec(c.id).then(() => onDeleted(c.id))}>
-                        {stats(c).total > 0 ? `מחק ו-${stats(c).total} הזמנות יישארו` : 'מחק סופית'}
+                        disabled={delBusy === c.id} onClick={() => remove(c)}>
+                        {delBusy === c.id ? 'מוחק…' : stats(c).total > 0 ? `מחק ו-${stats(c).total} הזמנות יישארו` : 'מחק סופית'}
                       </button>
                     </>
                   ) : (
@@ -132,6 +148,9 @@ export default function ClientList({ clients = [], onSaved, onDeleted, jobs = []
                       onClick={() => setConfirmDel(c.id)}>הסר</button>
                   )}
                 </div>
+                {rowErr?.id === c.id && (
+                  <div style={{ color: '#E5735B', fontSize: 13, fontWeight: 500, marginTop: 8 }}>{rowErr.text}</div>
+                )}
               </div>
             )
           })}

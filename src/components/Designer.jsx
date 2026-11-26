@@ -18,7 +18,9 @@ const AXES = [
 // נוסחאות מהירות לפי ציר
 const SMART = { x: '{רוחב}', y: '{גובה}', z: '{עומק}' }
 
-export default function Designer({ inventory = [], koolisot = [], jobs = [], onSave, onDelete, target, onTargetUsed }) {
+// active=false: הלשונית מוסתרת אבל המתכנן נשאר חי, כדי שמעבר ללשונית
+// אחרת לא ימחק עיצוב שעוד לא נשמר. מוסתר — לא מציירים (אין לו גודל).
+export default function Designer({ inventory = [], koolisot = [], jobs = [], onSave, onDelete, target, onTargetUsed, active = true }) {
   const cvRef = useRef(null)
   const hitsRef = useRef([])
   const dragRef = useRef(null)
@@ -88,10 +90,12 @@ export default function Designer({ inventory = [], koolisot = [], jobs = [], onS
   ), [selK, sel, parts])
 
   useEffect(() => {
+    if (!active) return
     hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: highlight, guides, marks: placedMarks })
-  }, [parts, dims, materials, view, highlight, guides, placedMarks])
+  }, [parts, dims, materials, view, highlight, guides, placedMarks, active])
 
   useEffect(() => {
+    if (!active) return
     const on = () => { hitsRef.current = render(cvRef.current, { parts, dims, materials, view, selId: highlight, guides, marks: placedMarks }) }
     window.addEventListener('resize', on)
     return () => window.removeEventListener('resize', on)

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { createEmployee, updateEmployee, deleteEmployee } from '../db.js'
-import { blankEmp as blank, toForm, rateOf } from '../empform.js'
+import { createEmployee, updateEmployee, deleteEmployee, setEmployeePassword } from '../db.js'
+import { blankEmp as blank, toForm, rateOf, passwordProblem, resetErrorText } from '../empform.js'
 import { loginHint } from '../loginname.js'
 
 const ROLES = ['מתקין', 'נהג', 'אחראי אתר', 'כללי']
@@ -22,6 +22,21 @@ export default function EmployeeEdit({ emp, selfUserId = null, others = [], onCl
   const [err, setErr] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
   const [copied, setCopied] = useState(false)
+  // איפוס סיסמה: null = סגור, אחרת מה שמוקלד
+  const [newPass, setNewPass] = useState(null)
+  const [passBusy, setPassBusy] = useState(false)
+  const [passMsg, setPassMsg] = useState(null)   // { ok, text }
+  const resetPass = async () => {
+    const bad = passwordProblem(newPass)
+    if (bad) { setPassMsg({ ok: false, text: bad }); return }
+    setPassBusy(true); setPassMsg(null)
+    try {
+      await setEmployeePassword(emp.id, newPass)
+      setPassMsg({ ok: true, text: `הסיסמה החדשה: ${newPass} — שלח אותה לעובד. הוא נכנס בשם שלו ועם הסיסמה הזו.` })
+      setNewPass(null)
+    } catch (e) { setPassMsg({ ok: false, text: resetErrorText(e) }) }
+    setPassBusy(false)
+  }
   const set = (k, v) => setF(s => ({ ...s, [k]: v }))
   const label = t => <div className="t-meta" style={{ marginBottom: 6 }}>{t}</div>
 
@@ -121,6 +136,30 @@ export default function EmployeeEdit({ emp, selfUserId = null, others = [], onCl
                       {h?.clash && (
                         <div style={{ color: '#E5735B', fontWeight: 600 }}>
                           יש עוד עובד בשם "{h.full}" — שנה את אחד השמות (למשל הוסף אות משם המשפחה), אחרת שניהם לא יוכלו להיכנס בשם
+                        </div>
+                      )}
+                      {newPass === null ? (
+                        <button type="button" className="btn btn-sm" style={{ marginTop: 10 }}
+                          onClick={() => { setNewPass(''); setPassMsg(null) }}>
+                          שכח סיסמה? איפוס סיסמה
+                        </button>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <input className="field" type="text" dir="ltr" autoComplete="off"
+                            value={newPass} onChange={e => setNewPass(e.target.value)}
+                            placeholder="סיסמה חדשה (6 תווים לפחות)" />
+                          <div className="row gap-2">
+                            <button type="button" className="btn btn-sm" onClick={() => { setNewPass(null); setPassMsg(null) }}>ביטול</button>
+                            <div className="grow" />
+                            <button type="button" className="btn btn-sm btn-solid" disabled={passBusy} onClick={resetPass}>
+                              {passBusy ? 'מאפס…' : 'קבע סיסמה'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {passMsg && (
+                        <div style={{ marginTop: 8, fontWeight: 600, color: passMsg.ok ? 'var(--go)' : '#E5735B' }}>
+                          {passMsg.text}
                         </div>
                       )}
                     </div>
